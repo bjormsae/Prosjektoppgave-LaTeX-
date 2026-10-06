@@ -1,24 +1,33 @@
 % =====================================================================
 % mtt_overview.tex  --  Multi-target tracking: overview of the field
-% Include with \input{mtt_overview} inside your report.
-%
-
+% Include with \import{./Sections/}{mtt_overview} inside your report.
 %
 % DESIGN PRINCIPLES (why the section is built this way)
-%   1. Funnel: problem -> parts -> map -> territory -> comparison -> choice.
-%   2. One question per artifact; each opens with that question and closes
-%      with a one-sentence hand-off to the next artifact.
-%   3. One colour per method family, reused in EVERY figure and table.
-%   4. One running example (Scenario S) reappears in the stress test.
-%   5. One template ("family card") for every family description.
+%   1. Building blocks are the backbone. Every method is described as a
+%      "recipe": one choice per block. Blocks can be mixed and matched
+%      (classical or learned), and even methods that do not fit the
+%      pipeline are described by WHICH blocks they fuse or replace.
+%   2. Funnel: problem -> blocks -> complexity -> map -> families ->
+%      methods outside the pipeline -> comparison -> choice.
+%   3. Families are defined by ONE axis: how many association hypotheses
+%      are kept. RFS is a modelling framework (a column in the map), not
+%      a family, so PMBM sits next to track-oriented MHT, delta-GLMB next
+%      to hypothesis-oriented MHT, and PMB/LMB next to JIPDA.
+%   4. Complexity management is cross-cutting: one subsection, and each
+%      family is placed on the same "approximation ladder".
+%   5. One colour per family, reused in EVERY figure and table.
+%   6. One running example (Scenario S) reappears in the stress test.
+%   7. One question per artifact; each closes with a one-sentence hand-off.
 % =====================================================================
 
 % ---------- shared style: family colours, marks, helpers -------------
-\definecolor{famSH}{HTML}{4C78A8}   % single-hypothesis association
-\definecolor{famMH}{HTML}{F58518}   % multi-hypothesis
-\definecolor{famRFS}{HTML}{54A24B}  % random finite set filters
-\definecolor{famTBD}{HTML}{B279A2}  % track-before-detect
-\definecolor{famDL}{HTML}{E45756}   % learning-based
+% Families = how many association hypotheses are kept
+\definecolor{famIMP}{HTML}{54A24B}  % implicit association (PHD/CPHD)
+\definecolor{famSH}{HTML}{4C78A8}   % single hypothesis, hard (GNN, SORT-family)
+\definecolor{famSM}{HTML}{72B7B2}   % single hypothesis, marginalised (JPDA, JIPDA, PMB, LMB)
+\definecolor{famMH}{HTML}{F58518}   % multiple hypotheses (MHT, PMBM, delta-GLMB)
+\definecolor{famOUT}{HTML}{B279A2}  % methods that rewire the pipeline (TBD, R-RANSAC, end-to-end)
+\definecolor{accLRN}{HTML}{E45756}  % accent: learned component (not a family!)
 \definecolor{cStrong}{HTML}{C7E9C0}
 \definecolor{cFair}{HTML}{FFF2AE}
 \definecolor{cWeak}{HTML}{F4B6B6}
@@ -30,10 +39,18 @@
 \newcommand{\weak}{\cellcolor{cWeak}Weak}
 \newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 \newcommand{\PD}{P_{\mathrm{D}}}
+\newcommand{\PS}{P_{\mathrm{S}}}
 % Same structure for every family description:
-\newcommand{\familycard}[4]{\par\noindent
-  \textbf{Idea.} #1 \textbf{Assumes.} #2 \textbf{Limits.} #3
-  \textbf{Typical use.} #4\par\smallskip}
+\newcommand{\familycard}[5]{\par\noindent
+  \textbf{Idea.} #1 \textbf{Recipe.} #2 \textbf{Assumes.} #3
+  \textbf{Limits.} #4 \textbf{Typical use.} #5\par\smallskip}
+% One block in the "rewired pipeline" strips (Fig. fig:rewired):
+% #1 first slot, #2 last slot, #3 row y, #4 label, #5 extra style
+\newcommand{\mttblk}[5]{%
+  \pgfmathsetmacro{\mttcx}{(#1+#2)/2*1.9}%
+  \pgfmathsetmacro{\mttw}{(#2-#1)*1.9+1.7}%
+  \pgfmathsetmacro{\mtttw}{(#2-#1)*1.9+1.5}%
+  \node[blk, minimum width=\mttw cm, text width=\mtttw cm, #5] at (\mttcx,#3) {#4};}
 
 % =====================================================================
 \section{Multi-Target Tracking: An overview}
@@ -42,16 +59,19 @@
 % ---- Opening + reading guide --------------------------------------
 Multi-target tracking (MTT) is the problem of estimating the number of
 targets and their states over time from noisy, incomplete and
-ambiguous sensor data. This section surveys the field in six steps,
-each answering one question. Table~\ref{tab:challenges} asks
-\emph{why the problem is hard}; Fig.~\ref{fig:pipeline} asks
-\emph{what the parts of a tracker are}; Fig.~\ref{fig:taxonomy} and
-Fig.~\ref{fig:lineage} give a \emph{map} of the approaches and how they
-evolved; Section~\ref{sec:families} describes each family;
-Section~\ref{sec:compare} compares them through three lenses
-(Tables~\ref{tab:compare}--\ref{tab:stress}, Fig.~\ref{fig:tradeoff});
-and Fig.~\ref{fig:selection} closes with a selection guide.
-Colours identify method families consistently throughout.
+ambiguous sensor data. This section is organised around one idea:
+\emph{a tracker is assembled from interchangeable building blocks}, and
+the named methods in the literature are particular recipes of block
+choices. Section~\ref{sec:formulation} states the problem and why it is
+hard. Section~\ref{sec:anatomy} introduces the blocks and the options
+for each. Section~\ref{sec:complexity} shows that many of these options
+exist to manage combinatorial complexity. Section~\ref{sec:map} uses the
+blocks to draw a map of the field, and Section~\ref{sec:families}
+describes each family as a recipe. Section~\ref{sec:outside} covers
+methods that fuse or replace blocks. Section~\ref{sec:compare} compares
+the families, and Section~\ref{sec:selection} turns the comparison into
+design choices for this project. Colours identify families consistently
+throughout.
 \TODO{Trim this paragraph once the section is written; keep it as a roadmap.}
 
 % =====================================================================
@@ -60,12 +80,16 @@ Colours identify method families consistently throughout.
 
 Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of
 target states at time $k$, with $N_k$ unknown and time-varying, and
-$Z_k$ the set of measurements received. Each target evolves as
+$Z_k$ the set of measurements received. Each target survives with
+probability $\PS$ and evolves as
 $\mathbf{x}_{k+1}=f(\mathbf{x}_k)+\mathbf{w}_k$, and is detected with
 probability $\PD$, producing $\mathbf{z}_k=h(\mathbf{x}_k)+\mathbf{v}_k$.
-The set $Z_k$ additionally contains clutter, and the origin of each
-measurement is unknown. \TODO{Fix notation here once and use it everywhere,
-including the RFS families later.}
+New targets appear according to a birth model. The set $Z_k$
+additionally contains clutter, and the origin of each measurement is
+unknown. \TODO{Fix notation here once and use it everywhere, including
+the RFS-based methods later. Define the association hypothesis
+$\theta_k$ here, since Sections~\ref{sec:anatomy}--\ref{sec:map} all
+refer to it.}
 
 \paragraph{Running example (Scenario S).}
 Two vessels on crossing courses, a third vessel joining the area,
@@ -76,27 +100,28 @@ where each family struggles.
 
 \begin{table}[t]
 \centering\small
-\caption{The four core difficulties of MTT and the module that addresses
-  each. This mapping is the bridge to the pipeline in
+\caption{The core difficulties of MTT and the building block that
+  addresses each. This mapping is the bridge to the blocks in
   Fig.~\ref{fig:pipeline}.}
 \label{tab:challenges}
 \begin{tabularx}{\textwidth}{l X l}
 \toprule
 Difficulty & Consequence & Addressed by \\
 \midrule
-Unknown target count   & Tracks must be born and deleted           & Track management \\
-Missed detections ($\PD<1$) & Gaps in measurement sequences        & Prediction, track logic \\
-Clutter                & Spurious measurements can start or corrupt tracks & Gating, association \\
+Unknown target count   & Targets appear and disappear     & Existence (birth/death) \\
+Missed detections ($\PD<1$) & Gaps; targets may exist undetected & Prediction, existence \\
+Clutter                & Spurious measurements can start or corrupt tracks & Gating, association, existence \\
 Origin uncertainty     & Which measurement belongs to which target? & Data association \\
+Combinatorial explosion & The number of association hypotheses grows exponentially over time & Hypothesis management (Sec.~\ref{sec:complexity}) \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-So far the problem; the next step is the standard decomposition of a
-tracker that these difficulties motivate.
+So far the problem; the next step is the decomposition of a tracker
+that these difficulties motivate.
 
 % =====================================================================
-\subsection{Anatomy of a tracker}
+\subsection{Anatomy of a tracker: interchangeable building blocks}
 \label{sec:anatomy}
 
 \begin{figure}[t]
@@ -107,110 +132,427 @@ tracker that these difficulties motivate.
               align=center, font=\small, fill=white},
   arr/.style={-{Latex[length=2mm]}, thick},
   node distance=0.7cm]
-\node[box] (meas)  {Sensor\\measurements};
-\node[box, right=of meas]  (gate)  {Gating};
+\node[box] (fe)    {Front-end\\(detector)};
+\node[box, right=of fe]    (gate)  {Gating};
 \node[box, right=of gate]  (assoc) {Data\\association};
 \node[box, right=of assoc] (upd)   {State\\update};
-\node[box, right=of upd]   (mgmt)  {Track\\management};
+\node[box, right=of upd]   (ex)    {Existence\\(birth/death)};
 \node[box, below=1cm of assoc] (pred) {Prediction\\(motion model)};
-\draw[arr] (meas) -- (gate);
+\node[right=0.5cm of ex, font=\small] (out) {Tracks};
+\draw[arr] (fe) -- (gate);
 \draw[arr] (gate) -- (assoc);
 \draw[arr] (assoc) -- (upd);
-\draw[arr] (upd) -- (mgmt);
-\draw[arr] (upd.south) |- (pred.east);
+\draw[arr] (upd) -- (ex);
+\draw[arr] (ex) -- (out);
+\draw[arr] (ex.south) |- (pred.east);
 \draw[arr] (pred.west) -| (gate.south);
-\node[draw, dashed, rounded corners, fit=(assoc)(upd)(mgmt), inner sep=7pt,
-      label={[font=\scriptsize]above:implicit / merged in RFS filters}] {};
+\node[draw, dashed, rounded corners, fit=(assoc)(upd)(ex), inner sep=7pt,
+      label={[font=\scriptsize]above:hypothesis management: representation and reduction
+      (Sec.~\ref{sec:anatomy-hyp}, \ref{sec:complexity})}] {};
 \end{tikzpicture}}
-\caption{Generic tracker pipeline. Detection-based trackers implement
-  each block explicitly; RFS filters merge the dashed blocks into one
-  Bayesian recursion.}
+\caption{The building blocks of a tracker. Each box is a slot that can
+  be filled independently, with a classical or a learned component
+  (Table~\ref{tab:designspace}). The dashed layer is the bookkeeping that
+  decides how many association hypotheses are carried between scans.}
 \label{fig:pipeline}
 \end{figure}
 
 Figure~\ref{fig:pipeline} introduces the vocabulary used for the rest of
-the section. Each module is summarised in one paragraph; the depth
-of detail belongs to the families in Section~\ref{sec:families}.
+the section. The key property is \emph{modularity}: the blocks
+communicate through a small interface (predicted densities, gated
+measurement sets, association weights), so an option in one block can
+usually be combined with any option in another.
+Table~\ref{tab:designspace} lists the options per block. A concrete
+tracker is obtained by picking one entry per row, and
+Table~\ref{tab:recipes} in Section~\ref{sec:map} shows that the
+well-known methods are exactly such picks.
 
-\paragraph{Motion models and filters.}
-\TODO{Constant velocity/turn, multiple-model (IMM); KF, EKF, UKF, particle filter; when each applies.}
-\paragraph{Gating.}
-\TODO{Validation regions (e.g.\ Mahalanobis distance); trade-off between missed and false associations.}
-\paragraph{Data association.}
-\TODO{Hard vs.\ soft assignment; global vs.\ local; this is the axis that separates the families in Fig.~\ref{fig:taxonomy}.}
-\paragraph{Track management.}
-\TODO{Initiation, confirmation (e.g.\ M-of-N), deletion.}
-\paragraph{Multi-sensor fusion architectures.}
-\TODO{Centralised (measurement-level) vs.\ distributed (track-to-track); asynchronous sensors; sensor bias/registration.}
+\begin{table}[t]
+\centering\small
+\caption[Design space of a tracker.]{Design space of a tracker. Pick one option per row; options in
+  different rows can be combined freely. Learned options
+  (\textcolor{accLRN}{\textbf{red}}) are drop-in replacements, not a
+  separate family.}
+\label{tab:designspace}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.4cm} X >{\raggedright\arraybackslash}p{4.0cm}}
+\toprule
+Block & Classical options & \textcolor{accLRN}{Learned options} \\
+\midrule
+Front-end      & Thresholding / CFAR detections; raw data (TBD) & CNN detectors (e.g.\ YOLO, CenterPoint) \\
+Motion model   & CV, CT, Singer; multiple models (IMM) & RNN/LSTM motion, learned dynamics \\
+Filter         & KF, EKF, UKF, particle filter, Gaussian mixtures & KalmanNet-style learned gain \\
+Sensor model   & Constant $\PD$ and clutter rate & Learned $\PD$ / clutter maps \\
+Gating         & Ellipsoidal (Mahalanobis), rectangular & Learned similarity thresholds \\
+Association cost & Kinematic likelihood & Appearance / re-ID embeddings, learned affinity \\
+Association decision & Hard, marginal (soft), deferred (multiple hypotheses) & (decided by the family, Sec.~\ref{sec:map}) \\
+Association solver & Hungarian, auction, Murty $k$-best, Gibbs sampling, LBP & GNN / attention-based matching \\
+Hypothesis repr.    & Track-oriented, hypothesis-oriented & -- \\
+Existence      & M-of-N, score thresholds, existence probability, Poisson undetected & Learned confidence scores \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-The choice made for the \emph{data association} and \emph{cardinality}
-blocks is what distinguishes the families, which is how the taxonomy
-below is organised.
+\paragraph{Mix and match in practice.}
+\TODO{Two to four short examples that make modularity concrete, e.g.\
+appearance features inside MHT (MHT revisited, Kim et al.\ 2015);
+PMBM run on CNN detections in autonomous driving; a learned motion
+model or learned Kalman gain inside a classical tracker (KalmanNet);
+DeepSORT = GNN + learned detector + learned re-ID. Verify each reference.}
+
+The blocks are now described one by one, at the level needed to read
+the map in Section~\ref{sec:map}.
+
+\subsubsection{Front-end: detections or raw data}
+\TODO{Most trackers consume thresholded point detections. Extended
+targets (several measurements per target) and raw-data input (TBD,
+Sec.~\ref{sec:outside}) change this block. Classical vs.\ learned detectors.}
+
+\subsubsection{Motion model and filter}
+\TODO{CV/CT, IMM; KF, EKF, UKF, PF; when each applies. Learned motion
+models as drop-in replacements. This block is single-target and is
+reused unchanged by every family.}
+
+\subsubsection{Gating}
+\TODO{Validation regions (Mahalanobis distance); trade-off between missed
+and false associations. Point forward: gating is the first complexity
+reduction step (Sec.~\ref{sec:complexity}).}
+
+\subsubsection{Data association}
+\label{sec:anatomy-da}
+Data association has two independent sub-choices: \emph{what} is decided
+and \emph{how} the resulting optimisation is solved.
+
+\paragraph{What is decided.} \TODO{Hard (commit to one assignment),
+marginal/soft (weight measurements by association probabilities and keep
+one hypothesis), or deferred (keep several global hypotheses). This
+choice defines the families in Section~\ref{sec:map}.}
+
+\paragraph{How it is solved.} Each decision type leads to a problem that
+can be solved exactly or approximately (Table~\ref{tab:solvers}). The
+solver is again an interchangeable part: the same tracker can switch
+from Murty's algorithm to Gibbs sampling without changing its model.
+
+\begin{table}[t]
+\centering\small
+\caption{Association problems and their exact and approximate solvers.
+  \TODO{Verify complexity statements and add references.}}
+\label{tab:solvers}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.6cm} X}
+\toprule
+Problem (used by) & Exact & Approximate \\
+\midrule
+Best single assignment (GNN, SORT) & Hungarian, auction, JVC (polynomial) & Greedy matching \\
+$k$ best assignments (MHT, PMBM, $\delta$-GLMB) & Murty's algorithm (polynomial in $k$) & Gibbs sampling, randomised $k$-best \\
+Marginal association probabilities (JPDA, JIPDA, PMB, LMB) & Full enumeration (\#P-hard in general) & $k$-best truncation, loopy belief propagation (LBP), MCMC/Gibbs \\
+Multi-frame assignment (N-scan MHT, batch) & Integer programming (NP-hard for $\geq 3$ frames) & Lagrangian relaxation, network flow (special cost structure) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Association cost.} \TODO{Kinematic likelihood vs.\ learned
+appearance affinity; how they are combined. Again independent of the
+decision and solver.}
+
+\subsubsection{Hypothesis representation}
+\label{sec:anatomy-hyp}
+When several hypotheses are kept, they can be stored in two ways
+(Fig.~\ref{fig:hyprep}). In a \emph{hypothesis-oriented} representation
+each global hypothesis carries its own complete set of tracks. In a
+\emph{track-oriented} representation each potential target keeps a tree
+of single-target hypotheses, and a global hypothesis is only a look-up
+of one leaf per target. The distinction is independent of the
+modelling framework: hypothesis-oriented MHT and $\delta$-GLMB use the
+first, track-oriented MHT and PMBM use the second.
+\TODO{Explain why track-oriented storage scales better (shared
+single-target hypotheses), and that it enables N-scan pruning per track.}
+
+\begin{figure}[t]
+\centering\small
+\begin{minipage}[t]{0.44\textwidth}\centering
+\textbf{Hypothesis-oriented}\par\medskip
+\begin{tabular}{l l}
+\toprule
+Global hyp. & Tracks (each stored in full) \\
+\midrule
+$H_1$ & $\tau_1^{a},\ \tau_2^{a}$ \\
+$H_2$ & $\tau_1^{b},\ \tau_2^{a}$ \\
+$H_3$ & $\tau_1^{a},\ \tau_2^{b},\ \tau_3^{a}$ \\
+\bottomrule
+\end{tabular}\par\medskip
+\textit{e.g.\ Reid's MHT, $\delta$-GLMB}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.52\textwidth}\centering
+\textbf{Track-oriented}\par\medskip
+\begin{tabular}{l l @{\qquad} l c c c}
+\toprule
+Target & Leaves & Global hyp. & $1$ & $2$ & $3$ \\
+\midrule
+$1$ & $\tau_1^{a},\tau_1^{b}$ & $H_1$ & $a$ & $a$ & -- \\
+$2$ & $\tau_2^{a},\tau_2^{b}$ & $H_2$ & $b$ & $a$ & -- \\
+$3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
+\bottomrule
+\end{tabular}\par\medskip
+\textit{e.g.\ track-oriented MHT, PMBM}
+\end{minipage}
+\caption{Two ways to store the same three global hypotheses. Left: each
+  hypothesis holds full copies of its tracks. Right: single-target
+  hypotheses are stored once per target, and global hypotheses are
+  index tuples into them. \TODO{Optionally redraw as hypothesis trees.}}
+\label{fig:hyprep}
+\end{figure}
+
+\subsubsection{Existence: birth, death and undetected targets}
+\label{sec:anatomy-existence}
+Target count is handled by a dedicated block that answers three
+questions: when does a target start, when does it end, and can a target
+exist without ever having been detected? Each can be answered
+heuristically or probabilistically (Table~\ref{tab:existence}).
+
+\begin{table}[t]
+\centering\small
+\caption{Heuristic and probabilistic options for the existence block.
+  The two columns can be mixed, e.g.\ probabilistic termination with
+  heuristic initiation.}
+\label{tab:existence}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.2cm} X X}
+\toprule
+Question & Heuristic & Probabilistic \\
+\midrule
+Initiation   & Tentative tracks from unassociated measurements; two-point initiation; sliding-window RANSAC (R-RANSAC) & Birth model (fixed or measurement-driven/adaptive) \\
+Confirmation & M-of-N logic; track age & Existence probability (IPDA, Bernoulli $r$) or track score (LLR) above a threshold \\
+Termination  & N consecutive misses; maximum coasting time & Existence decays through $\PS$ and $1-\PD$; removed when below a threshold \\
+Undetected targets & Not represented & Poisson intensity of undetected targets (PMBM); implicit in PHD \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\TODO{Note that the MHT track score is a probabilistic quantity with a
+heuristic threshold, i.e.\ the boundary is gradual. Point out that
+the RFS framework mainly contributes here: it gives birth, death and
+undetected targets a principled model.}
+
+\subsubsection{Multi-sensor fusion}
+\TODO{Centralised (measurement-level) vs.\ distributed (track-to-track);
+asynchronous sensors; sensor bias/registration. Orthogonal to all other blocks.}
+
+With the blocks defined, the next question is why so many of the options
+in Table~\ref{tab:designspace} are approximations.
 
 % =====================================================================
-\subsection{Taxonomy and lineage}
-\label{sec:taxonomy}
+\subsection{Managing complexity}
+\label{sec:complexity}
+
+The exact multi-target posterior is a mixture over all association
+histories, and the number of these grows exponentially with time,
+targets and measurements. Every practical tracker therefore applies a
+chain of reductions (Fig.~\ref{fig:funnel}), and many design choices
+that look like modelling decisions are really complexity decisions.
+\TODO{One sentence with the growth rate, e.g.\ the number of
+single-scan association events for $n$ targets and $m$ measurements.}
 
 \begin{figure}[t]
 \centering
-\begin{forest}
-for tree={grow=east, draw, rounded corners, font=\small, align=left,
-          l sep=7mm, s sep=1.5mm, edge={thick}, fill=white}
-[MTT, fill=black!10
-  [Detection-level\\input, fill=black!5
-    [Single-hypothesis, fill=famSH!35, for children={fill=famSH!12}
-      [GNN] [PDA / JPDA / JIPDA]]
-    [Multi-hypothesis, fill=famMH!35, for children={fill=famMH!12}
-      [Hypothesis-oriented MHT] [Track-oriented MHT]]
-    [RFS filters, fill=famRFS!35, for children={fill=famRFS!12}
-      [{Unlabelled: PHD, CPHD, MeMBer}]
-      [{Labelled: LMB, $\delta$-GLMB}]
-      [{Conjugate: PMBM}]]
-    [Learning-based, fill=famDL!35, for children={fill=famDL!12}
-      [Tracking-by-detection\\(SORT-style)] [End-to-end\\(transformers)]]]
-  [Raw-signal\\input, fill=black!5
-    [Track-before-detect, fill=famTBD!35, for children={fill=famTBD!12}
-      [Dynamic programming] [Particle / RFS-based]]]]
-\end{forest}
-\caption{Taxonomy of MTT approaches. The first split is the input level
-  (thresholded detections vs.\ raw sensor data); the second is how
-  association and target count are handled.}
+\begin{tikzpicture}[
+  st/.style={draw, rounded corners=2pt, minimum height=0.62cm, font=\small,
+             fill=famMH!12, align=center},
+  ds/.style={font=\scriptsize, anchor=west, text width=6.4cm, align=left}]
+\foreach \y/\w/\name/\desc in {
+  0/7.0/{All association histories}/{Exact posterior; exponential in time, targets and measurements},
+  -0.75/6.2/{Gating}/{Drop unlikely target--measurement pairs},
+  -1.5/5.4/{Clustering}/{Split into independent subproblems (exact given the gates)},
+  -2.25/4.6/{$k$-best / sampling}/{Generate only the most likely new hypotheses (Murty, Gibbs)},
+  -3.0/3.8/{Prune / cap / N-scan}/{Drop low-weight hypotheses; bound their number and depth},
+  -3.75/3.0/{Merge / marginalise}/{Collapse similar hypotheses, or all into one (JPDA, PMB, LMB)},
+  -4.5/2.2/{Recycle}/{Move unlikely tracks into the undetected/birth model}}{
+  \node[st, minimum width=\w cm] at (0,\y) {\name};
+  \node[ds] at (3.8,\y) {\desc};}
+\draw[-{Latex[length=2mm]}, thick] (-3.7,0) -- node[rotate=90, above, font=\scriptsize]{fewer hypotheses} (-3.7,-4.5);
+\end{tikzpicture}
+\caption{The complexity funnel. Each stage bounds the number of
+  association hypotheses at some cost in accuracy. Families differ
+  mainly in \emph{where} they stop: GNN keeps one hard hypothesis,
+  JPDA-type methods marginalise every scan, and MHT/PMBM-type methods
+  stop at pruning. Density-level reductions (mixture reduction,
+  particle resampling) act inside each hypothesis.}
+\label{fig:funnel}
+\end{figure}
+
+\begin{table}[t]
+\centering\small
+\caption{Complexity-management techniques, what they bound, and where
+  they are used. \TODO{Verify the ``used by'' column.}}
+\label{tab:complexity}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{3.4cm} c X}
+\toprule
+Technique & Bounds & Exact? & Typical users \\
+\midrule
+Gating            & Candidate pairs           & $\approx$ & All \\
+Clustering        & Problem size              & \cmark  & JPDA, MHT, PMBM, $\delta$-GLMB \\
+$k$-best (Murty)  & New global hypotheses     & \xmark  & MHT, PMBM, $\delta$-GLMB \\
+Gibbs sampling    & New global hypotheses     & \xmark  & $\delta$-GLMB, PMBM \\
+Pruning           & Hypotheses, Bernoullis, mixture components & \xmark & All multi-hypothesis methods, GM-PHD \\
+Capping           & Maximum number (hard memory/time bound) & \xmark & MHT, PMBM, $\delta$-GLMB \\
+N-scan pruning    & Hypothesis depth          & \xmark  & Track-oriented MHT, PMBM \\
+Merging           & Similar hypotheses/components & \xmark & MHT, GM-PHD \\
+Marginalisation   & All hypotheses into one   & \xmark  & JPDA, JIPDA, PMB, LMB \\
+Recycling         & Low-existence Bernoullis into Poisson/birth & \xmark & PMBM, LMB \\
+Monte Carlo / mixtures & Density representation & \xmark & Particle filters, SMC-/GM-PHD \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Clustering.} \TODO{Deserves a separate paragraph: it is the
+only reduction that is exact (given gating), it is what makes JPDA and
+MHT tractable in sparse scenes, and its benefit vanishes when targets
+are close. Relevant for Scenario~S (crossing vessels merge two clusters).}
+
+\paragraph{Approximation ladder.} \TODO{Close the subsection with the key
+insight: the families in Section~\ref{sec:map} can be ordered by how
+early in Fig.~\ref{fig:funnel} they collapse the hypothesis space. This
+explains the cost--fidelity ordering in Fig.~\ref{fig:tradeoff}.}
+
+The block options and the complexity reductions together give the axes
+for a map of the field.
+
+% =====================================================================
+\subsection{A map of the field}
+\label{sec:map}
+
+Two axes are enough to place almost every detection-based tracker
+(Fig.~\ref{fig:taxonomy}). The vertical axis is the association
+decision from Section~\ref{sec:anatomy-da}: how many association
+hypotheses are carried between scans, and how they are stored. The
+horizontal axis is the modelling framework: classical vector-based
+models, or random finite sets (RFS). The second axis matters less than
+it first appears. Methods in the same row share the same association
+structure and complexity, and differ mainly in how carefully the
+existence block is modelled. PMBM is therefore closer to track-oriented
+MHT than to the PHD filter, and PMB and LMB are close relatives of
+JIPDA. \TODO{Cite the papers that make these links explicit (Williams
+on PMB vs.\ JIPDA; Garc\'ia-Fern\'andez et al.\ on PMBM vs.\ $\delta$-GLMB).}
+
+\begin{figure}[t]
+\centering\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.6cm}}
+\toprule
+Association hypotheses kept & Vector-based (classical) & Set-based (RFS) \\
+\midrule
+\cellcolor{famIMP!30}None (association marginalised inside the update)
+  & \cellcolor{famIMP!12}--
+  & \cellcolor{famIMP!12}PHD, CPHD (no identities) \\
+\cellcolor{famSH!30}One, hard
+  & \cellcolor{famSH!12}GNN; SORT, DeepSORT, ByteTrack
+  & \cellcolor{famSH!12}\emph{rare} (e.g.\ GNN-PMB) \\
+\cellcolor{famSM!30}One, marginalised (soft)
+  & \cellcolor{famSM!12}PDA, JPDA, IPDA, JIPDA
+  & \cellcolor{famSM!12}PMB, LMB, MeMBer \\
+\cellcolor{famMH!30}Many, hypothesis-oriented
+  & \cellcolor{famMH!12}Reid's MHT (HOMHT)
+  & \cellcolor{famMH!12}$\delta$-GLMB \\
+\cellcolor{famMH!30}Many, track-oriented
+  & \cellcolor{famMH!12}Track-oriented MHT (TOMHT)
+  & \cellcolor{famMH!12}PMBM \\
+\midrule
+\multicolumn{3}{p{11.8cm}}{\emph{Orthogonal to every cell:} front-end (detections or raw data), learned components, multi-sensor architecture.} \\
+\multicolumn{3}{p{11.8cm}}{\emph{Outside the grid:} methods that fuse or replace blocks (Sec.~\ref{sec:outside}, colour \textcolor{famOUT}{\textbf{purple}}).} \\
+\bottomrule
+\end{tabular}
+\caption{Map of detection-based MTT. Rows (families) are the
+  association decision; fidelity and cost increase downwards. Columns
+  are the modelling framework. Methods in the same row share their
+  association structure. \TODO{Verify GNN-PMB and the MeMBer placement.}}
 \label{fig:taxonomy}
 \end{figure}
 
+Table~\ref{tab:recipes} makes the building-block view explicit by
+listing the choices each named method makes. Front-end, motion model and
+filter are omitted because every method accepts any choice there.
 
-Figure~\ref{fig:taxonomy} gives the structure; Fig.~\ref{fig:lineage}
-adds time, showing which methods were derived from which.
+\begin{table}[t]
+\centering\footnotesize
+\caption{Named methods as recipes of block choices.
+  \TODO{Verify each cell against the original papers.}}
+\label{tab:recipes}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.7cm} >{\raggedright\arraybackslash}p{1.3cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{1.9cm} X c}
+\toprule
+Method & Decision & Solver & Storage & Existence & RFS \\
+\midrule
+\rowcolor{famSH!15}  GNN       & Hard     & Hungarian/auction & -- & M-of-N, miss count & \xmark \\
+\rowcolor{famSH!15}  SORT-family & Hard   & Hungarian (IoU / re-ID cost) & -- & Track age, miss count & \xmark \\
+\rowcolor{famSM!15}  JPDA      & Marginal & Enumeration or approx.\ marginals & -- & External logic & \xmark \\
+\rowcolor{famSM!15}  JIPDA     & Marginal & Approx.\ marginals & -- & Existence probability & \xmark \\
+\rowcolor{famSM!15}  PMB       & Marginal & LBP or $k$-best, then marginalise & -- & Bernoulli $r$ + Poisson undetected & \cmark \\
+\rowcolor{famSM!15}  LMB       & Marginal & Gibbs/$k$-best, then marginalise & -- & Labelled Bernoulli $r$ & \cmark \\
+\rowcolor{famMH!15}  HOMHT     & Deferred & $k$-best (Murty) & Hyp.-oriented & Track score, heuristics & \xmark \\
+\rowcolor{famMH!15}  TOMHT     & Deferred & $k$-best, multi-frame & Track-oriented & Track score (LLR) & \xmark \\
+\rowcolor{famMH!15}  $\delta$-GLMB & Deferred & Murty or Gibbs & Hyp.-oriented & Label sets, birth model & \cmark \\
+\rowcolor{famMH!15}  PMBM      & Deferred & Murty or Gibbs & Track-oriented & Bernoulli $r$ + Poisson undetected & \cmark \\
+\rowcolor{famIMP!15} PHD/CPHD  & None     & -- & -- & Intensity (+ cardinality for CPHD) & \cmark \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Figure~\ref{fig:lineage} adds time, showing which methods were derived
+from which.
 
 \begin{figure}[t]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  n/.style={draw, rounded corners, font=\scriptsize, minimum height=6mm, inner sep=3pt},
+  n/.style={draw, rounded corners, font=\scriptsize, minimum height=6mm, inner sep=3pt, align=center},
+  rfs/.style={double, double distance=1pt},
+  lane/.style={font=\scriptsize\bfseries, anchor=east, align=right},
   a/.style={-{Latex[length=1.5mm]}, thick},
   d/.style={-{Latex[length=1.5mm]}, dashed}]
-\node[n, fill=famSH!25]  (gnn)   at (0,0)    {GNN};
-\node[n, fill=famSH!25]  (pda)   at (2,0)    {PDA};
-\node[n, fill=famSH!25]  (jpda)  at (4,0)    {JPDA};
-\node[n, fill=famSH!25]  (jipda) at (6.5,0)  {JIPDA};
-\node[n, fill=famMH!25]  (mht)   at (3,-1)   {MHT};
-\node[n, fill=famRFS!25] (phd)   at (5.5,-2) {PHD};
-\node[n, fill=famRFS!25] (cphd)  at (7.5,-2) {CPHD};
-\node[n, fill=famRFS!25] (dglmb) at (8,-3)   {$\delta$-GLMB};
-\node[n, fill=famRFS!25] (lmb)   at (10,-3)  {LMB};
-\node[n, fill=famRFS!25] (pmbm)  at (12,-3)  {PMBM};
-\node[n, fill=famDL!25]  (sort)  at (9.5,-4) {SORT};
-\node[n, fill=famDL!25]  (dsort) at (11.5,-4){DeepSORT};
-\node[n, fill=famDL!25]  (tr)    at (13.5,-4){Transformers};
-\draw[a] (pda)--(jpda); \draw[a] (jpda)--(jipda);
-\draw[a] (phd)--(cphd); \draw[a] (dglmb)--(lmb); \draw[a] (dglmb)--(pmbm);
-\draw[a] (sort)--(dsort); \draw[a] (dsort)--(tr);
-\draw[d] (mht) to[bend right=15] (pmbm);
-\draw[-{Latex}, thick] (0,-4.8) -- node[below,font=\scriptsize]{time} (13.5,-4.8);
+% lanes
+\node[lane, text=famSH]  at (-0.8, 0)   {Hard};
+\node[lane, text=famSM]  at (-0.8,-1.2) {Marginal};
+\node[lane, text=famMH]  at (-0.8,-2.4) {Multiple};
+\node[lane, text=famIMP] at (-0.8,-3.6) {Implicit};
+\node[lane, text=famOUT] at (-0.8,-4.8) {Outside};
+% hard
+\node[n, fill=famSH!25]  (gnn)   at (0.5,0)   {GNN};
+\node[n, fill=famSH!25]  (sort)  at (11,0)    {SORT '16};
+\node[n, fill=famSH!25]  (dsort) at (13,0)    {DeepSORT '17};
+\node[n, fill=famSH!25]  (byte)  at (15.2,0)  {ByteTrack '22};
+% marginal
+\node[n, fill=famSM!25]  (pda)   at (0.5,-1.2) {PDA '75};
+\node[n, fill=famSM!25]  (jpda)  at (2.5,-1.2) {JPDA '83};
+\node[n, fill=famSM!25]  (ipda)  at (4.5,-1.2) {IPDA '94};
+\node[n, fill=famSM!25]  (jipda) at (6.5,-1.2) {JIPDA '04};
+\node[n, fill=famSM!25, rfs] (lmb) at (9,-1.2)  {LMB '14};
+\node[n, fill=famSM!25, rfs] (pmb) at (11,-1.2) {PMB '15};
+% multiple
+\node[n, fill=famMH!25]  (homht) at (1.5,-2.4) {HOMHT '79};
+\node[n, fill=famMH!25]  (tomht) at (4,-2.4)   {TOMHT '90};
+\node[n, fill=famMH!25, rfs] (glmb) at (9,-2.4)  {$\delta$-GLMB '13};
+\node[n, fill=famMH!25, rfs] (pmbm) at (11,-2.4) {PMBM '15};
+% implicit
+\node[n, fill=famIMP!25, rfs] (phd)  at (6.5,-3.6) {PHD '03};
+\node[n, fill=famIMP!25, rfs] (cphd) at (8.5,-3.6) {CPHD '07};
+% outside
+\node[n, fill=famOUT!25] (tbd)   at (2,-4.8)    {TBD (DP) '85};
+\node[n, fill=famOUT!25] (flow)  at (8.5,-4.8)  {Network flow '08};
+\node[n, fill=famOUT!25] (rr)    at (11,-4.8)   {R-RANSAC '14};
+\node[n, fill=famOUT!25] (trf)   at (15.2,-4.8) {Transformers '22};
+% derivations
+\draw[a] (gnn)--(sort); \draw[a] (sort)--(dsort); \draw[a] (dsort)--(byte);
+\draw[a] (pda)--(jpda); \draw[a] (jpda) to[bend left=20] (jipda); \draw[a] (ipda)--(jipda);
+\draw[a] (homht)--(tomht);
+\draw[a] (phd)--(cphd);
+\draw[a] (glmb)--(lmb); \draw[a] (pmbm)--(pmb);
+% conceptual links
+\draw[d] (tomht) to[bend right=12] (pmbm);
+\draw[d] (homht) to[bend right=14] (glmb);
+\draw[d] (jipda) to[bend left=14] (pmb);
+\draw[d] (dsort) to[bend left=10] (trf);
+\draw[-{Latex}, thick] (0,-5.6) -- node[below,font=\scriptsize]{time} (16,-5.6);
 \end{tikzpicture}}
 \caption{Lineage of methods, one lane per family (colours as in
-  Fig.~\ref{fig:taxonomy}). Dashed: conceptual link (MHT ideas reappear
-  in PMBM). \TODO{Add years and verify every arrow against the sources.}}
+  Fig.~\ref{fig:taxonomy}); RFS-based methods have a double border.
+  Solid: derived from. Dashed: conceptual link across frameworks (same
+  association structure). \TODO{Verify every year and arrow against the sources.}}
 \label{fig:lineage}
 \end{figure}
 
@@ -219,45 +561,116 @@ adds time, showing which methods were derived from which.
 \label{sec:families}
 
 Each family follows the same template so that the reader can scan across
-them: idea, assumptions, limits, typical use.
+them: idea, recipe, assumptions, limits, typical use. Vector-based and
+RFS-based members of a family are described together.
 
-\paragraph{\textcolor{famSH}{Single-hypothesis association.}}
+\paragraph{\textcolor{famSH}{One hard hypothesis (GNN, SORT-family).}}
 \familycard
- {\TODO{One committed association per scan (GNN: global assignment; JPDA: weighted average over associations).}}
- {\TODO{Known/managed target count, moderate clutter.}}
- {\TODO{Fails under ambiguity; JPDA suffers track coalescence.}}
- {\TODO{Low-cost real-time systems.}}
+ {\TODO{Commit to the single best global assignment each scan.}}
+ {\TODO{Hungarian/auction; heuristic existence. SORT-family = same recipe with learned detector and (DeepSORT) learned re-ID cost.}}
+ {\TODO{Well-separated targets, low clutter, or strong appearance cues.}}
+ {\TODO{Irreversible errors under ambiguity; track swaps at crossings.}}
+ {\TODO{Low-cost real-time systems; video tracking-by-detection.}}
 
-\paragraph{\textcolor{famMH}{Multi-hypothesis tracking.}}
+\paragraph{\textcolor{famSM}{One marginalised hypothesis (JPDA, JIPDA, PMB, LMB).}}
 \familycard
- {\TODO{Keep competing association hypotheses and defer decisions.}}
- {\TODO{Pruning/merging keeps hypothesis growth manageable.}}
- {\TODO{Exponential growth; tuning-sensitive.}}
- {\TODO{Ambiguous, cluttered scenes.}}
+ {\TODO{Weight all feasible associations, then collapse to one hypothesis per scan.}}
+ {\TODO{Approximate marginals (enumeration, LBP, $k$-best); existence probability (JIPDA, PMB, LMB) or external logic (JPDA).}}
+ {\TODO{Moderate clutter; ambiguity resolves within one scan.}}
+ {\TODO{Track coalescence for closely spaced targets; information lost by marginalising.}}
+ {\TODO{Cluttered scenes with moderate compute budget.}}
 
-\paragraph{\textcolor{famRFS}{Random finite set filters.}}
+\paragraph{\textcolor{famMH}{Many hypotheses (MHT, PMBM, $\delta$-GLMB).}}
 \familycard
- {\TODO{Model targets as a random finite set; propagate the multi-target density (or a moment/parametric approximation).}}
- {\TODO{Standard multi-target model; birth and clutter models.}}
- {\TODO{Unlabelled variants give no identities; complexity vs.\ accuracy of approximations.}}
- {\TODO{Unknown, varying target counts.}}
+ {\TODO{Keep competing global hypotheses and defer decisions until later data resolves them.}}
+ {\TODO{Murty or Gibbs; pruning, capping, N-scan; track-oriented (TOMHT, PMBM) or hypothesis-oriented (HOMHT, $\delta$-GLMB) storage.}}
+ {\TODO{Enough compute; reduction parameters tuned to the scenario.}}
+ {\TODO{Exponential growth held back only by approximations; tuning-sensitive.}}
+ {\TODO{Ambiguous, cluttered scenes; crossing targets.}}
 
-\paragraph{\textcolor{famTBD}{Track-before-detect.}}
+\paragraph{\textcolor{famIMP}{Implicit association (PHD, CPHD).}}
 \familycard
- {\TODO{Skip thresholding; integrate evidence over time from raw data.}}
- {\TODO{Access to raw or low-level sensor data.}}
- {\TODO{Heavy computation; sensor-specific.}}
- {\TODO{Low signal-to-noise targets.}}
+ {\TODO{Propagate only the first moment (and cardinality for CPHD) of the multi-target density; association is summed out inside the update.}}
+ {\TODO{No association solver; Gaussian-mixture or particle implementation; birth intensity.}}
+ {\TODO{Poisson-type models; identities not required.}}
+ {\TODO{No track identities without extra labelling; poor for close targets; ``spooky effect'' in CPHD.}}
+ {\TODO{Many targets, estimating counts and densities rather than tracks.}}
 
-\paragraph{\textcolor{famDL}{Learning-based trackers.}}
-\familycard
- {\TODO{Learn appearance/association cues from data; often wrapped around a classical motion model.}}
- {\TODO{Annotated training data; appearance information.}}
- {\TODO{Limited probabilistic guarantees; domain shift.}}
- {\TODO{Video-based tracking.}}
+So far every method fits the pipeline of Fig.~\ref{fig:pipeline}. The
+next subsection covers those that do not.
 
-With the families described individually, the next section compares them
-across common criteria.
+% =====================================================================
+\subsection{Methods outside the pipeline}
+\label{sec:outside}
+
+Some methods do not fill the slots of Fig.~\ref{fig:pipeline} one by
+one. They are still described with the same vocabulary, by stating
+which blocks they \emph{fuse} into one operation and which they
+\emph{replace} (Fig.~\ref{fig:rewired}). This keeps them on the same
+map: each strip shows what is gained and what modularity is lost.
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  blk/.style={draw, rounded corners=2pt, minimum height=0.7cm, font=\scriptsize,
+              align=center, fill=white, inner sep=1pt},
+  rl/.style={font=\scriptsize, anchor=east, align=right, text width=3.0cm}]
+% header
+\foreach \i/\t in {0/Front-end, 1/Prediction, 2/Gating, 3/Association, 4/Update, 5/Existence}
+  {\node[font=\scriptsize\bfseries] at (\i*1.9, 0.6) {\t};}
+% standard
+\node[rl] at (-1.1,0) {Standard pipeline};
+\foreach \i/\t in {0/Detector,1/Motion,2/Gate,3/Assign,4/Filter,5/Logic}{\mttblk{\i}{\i}{0}{\t}{}}
+% PHD
+\node[rl] at (-1.1,-0.9) {\textcolor{famIMP}{PHD / CPHD}};
+\foreach \i/\t in {0/Detector,1/Motion,2/Gate}{\mttblk{\i}{\i}{-0.9}{\t}{}}
+\mttblk{3}{5}{-0.9}{Single intensity recursion (association summed out)}{fill=famIMP!20}
+% TBD
+\node[rl] at (-1.1,-1.8) {\textcolor{famOUT}{Track-before-detect}};
+\mttblk{0}{0}{-1.8}{Raw data}{fill=famOUT!20}
+\mttblk{1}{1}{-1.8}{Motion}{}
+\mttblk{2}{4}{-1.8}{Evidence integrated over time (no thresholding)}{fill=famOUT!20}
+\mttblk{5}{5}{-1.8}{Threshold}{}
+% R-RANSAC
+\node[rl] at (-1.1,-2.7) {\textcolor{famOUT}{R-RANSAC}};
+\foreach \i/\t in {0/Detector,1/Motion,2/Gate,3/Assign,4/Filter}{\mttblk{\i}{\i}{-2.7}{\t}{}}
+\mttblk{5}{5}{-2.7}{Window\\RANSAC}{fill=famOUT!20}
+% batch / network flow
+\node[rl] at (-1.1,-3.6) {\textcolor{famOUT}{Batch / network flow}};
+\mttblk{0}{0}{-3.6}{Detector}{}
+\mttblk{1}{5}{-3.6}{Joint optimisation over a time window (all associations and track starts/ends at once)}{fill=famOUT!20}
+% end-to-end
+\node[rl] at (-1.1,-4.5) {\textcolor{famOUT}{End-to-end transformer}};
+\mttblk{0}{5}{-4.5}{Learned network: detection, association and track management as track queries}{fill=accLRN!20}
+\end{tikzpicture}}
+\caption{Methods described by the blocks they fuse (wide boxes) or
+  replace (shaded boxes). White boxes are standard blocks.
+  \TODO{Check the R-RANSAC strip: it replaces initiation with
+  hypothesise-and-test over a sliding window and keeps a filter bank.}}
+\label{fig:rewired}
+\end{figure}
+
+\paragraph{\textcolor{famOUT}{Track-before-detect.}}
+\TODO{Fuses detection, association and update by integrating raw sensor
+evidence over time. Gains: low-SNR targets. Costs: heavy computation,
+sensor-specific. Dynamic programming, particle and RFS-based (Bernoulli) variants.}
+\paragraph{\textcolor{famOUT}{Recursive RANSAC.}}
+\TODO{Replaces probabilistic initiation with hypothesise-and-test over a
+measurement window; otherwise a bank of filters with heuristic
+association. Mostly a different existence block.}
+\paragraph{\textcolor{famOUT}{Batch and network-flow methods.}}
+\TODO{Solve association over a whole window jointly (min-cost flow,
+multi-frame assignment). Related to N-scan MHT; offline or with latency.}
+\paragraph{\textcolor{famOUT}{End-to-end learned trackers.}}
+\TODO{TrackFormer, MOTR: track queries carry identity across frames,
+so association and existence are learned jointly. Gains: no hand-tuned
+association. Costs: no explicit uncertainty, large training sets,
+domain shift. Contrast with Table~\ref{tab:designspace}, where learning
+replaces a single block.}
+
+With all methods placed on the same vocabulary, they can be compared
+on common criteria.
 
 % =====================================================================
 \subsection{Comparing the families}
@@ -272,18 +685,18 @@ Three lenses are used in turn: \emph{what each method assumes},
 \centering\small
 \caption{Assumptions and outputs by method. \TODO{Verify each cell against the cited sources.}}
 \label{tab:compare}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.0cm} p{2.3cm} c p{2.6cm} X p{2.2cm}}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.0cm} p{2.3cm} c p{2.6cm} X p{2.0cm}}
 \toprule
 Method & Target count & Identity & Cost & Key requirements & Multi-sensor \\
 \midrule
-\rowcolor{famSH!15}  GNN       & external logic & \cmark & polynomial & separated targets, low clutter & sequential \\
-\rowcolor{famSH!15}  JPDA      & external logic & \cmark & exponential (approx.\ exist) & Gaussian, moderate clutter & sequential \\
+\rowcolor{famSH!15}  GNN, SORT-family & external logic & \cmark & polynomial & separated targets or appearance cues & sequential \\
+\rowcolor{famSM!15}  JPDA, JIPDA & logic / existence & \cmark & exponential (approx.\ exist) & moderate clutter & sequential \\
+\rowcolor{famSM!15}  PMB, LMB  & estimated & \cmark & moderate & known $\PD$, clutter rate & sequential \\
 \rowcolor{famMH!15}  MHT       & hypothesis-level & \cmark & exponential, pruned & pruning parameters & centralised \\
-\rowcolor{famRFS!15} PHD/CPHD  & estimated & \xmark & low--moderate & Poisson-type models & approximate \\
-\rowcolor{famRFS!15} LMB/$\delta$-GLMB & estimated & \cmark & moderate--high & known $\PD$, clutter rate & centralised \\
-\rowcolor{famRFS!15} PMBM      & estimated & \cmark & moderate--high & Poisson birth, clutter & centralised \\
-\rowcolor{famTBD!15} TBD       & implicit & varies & high & raw data & sensor-specific \\
-\rowcolor{famDL!15}  Learning  & detector-driven & \cmark & GPU inference & training data & mostly single \\
+\rowcolor{famMH!15}  PMBM, $\delta$-GLMB & estimated & \cmark & moderate--high & known $\PD$, clutter rate, birth model & centralised \\
+\rowcolor{famIMP!15} PHD/CPHD  & estimated & \xmark & low--moderate & Poisson-type models & approximate \\
+\rowcolor{famOUT!15} TBD       & implicit & varies & high & raw data & sensor-specific \\
+\rowcolor{famOUT!15} End-to-end & learned & \cmark & GPU inference & training data & mostly single \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -302,14 +715,15 @@ Table~\ref{tab:stress} maps each component of Scenario~S
 \toprule
 Method & Crossing & Dense clutter & Close spacing & Low $\PD$ & Birth/death \\
 \midrule
-GNN        & \weak   & \weak   & \weak   & \fair   & \weak \\
-JPDA       & \fair   & \fair   & \weak   & \fair   & \weak \\
-MHT        & \strong & \fair   & \strong & \strong & \fair \\
-PHD/CPHD   & \fair   & \fair   & \weak   & \fair   & \strong \\
-LMB/$\delta$-GLMB & \strong & \fair & \strong & \fair & \strong \\
-PMBM       & \strong & \fair   & \strong & \strong & \strong \\
-TBD        & \fair   & \strong & \fair   & \strong & \fair \\
-Learning   & \fair   & \weak   & \fair   & \weak   & \fair \\
+GNN                 & \weak   & \weak   & \weak   & \fair   & \weak \\
+SORT-family         & \fair   & \weak   & \fair   & \weak   & \fair \\
+JPDA, JIPDA         & \fair   & \fair   & \weak   & \fair   & \fair \\
+PMB, LMB            & \fair   & \fair   & \fair   & \fair   & \strong \\
+MHT                 & \strong & \fair   & \strong & \strong & \fair \\
+PMBM, $\delta$-GLMB & \strong & \fair   & \strong & \strong & \strong \\
+PHD/CPHD            & \fair   & \fair   & \weak   & \fair   & \strong \\
+TBD                 & \fair   & \strong & \fair   & \strong & \fair \\
+End-to-end          & \fair   & \weak   & \fair   & \weak   & \fair \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -326,53 +740,60 @@ Learning   & \fair   & \weak   & \fair   & \weak   & \fair \\
   nodes near coords, point meta=explicit symbolic,
   every node near coord/.append style={font=\scriptsize, anchor=west, xshift=2pt},
   mark=*]
-\addplot[only marks, color=famSH]  coordinates {(1,3) [GNN] (3,4.5) [JPDA]};
-\addplot[only marks, color=famMH]  coordinates {(6.5,7.5) [MHT]};
-\addplot[only marks, color=famRFS] coordinates {(1.5,4) [PHD] (3.5,5.5) [CPHD] (5,7) [LMB] (7,8.5) [$\delta$-GLMB] (6,8) [PMBM]};
-\addplot[only marks, color=famTBD] coordinates {(9,9) [TBD]};
-\addplot[only marks, color=famDL]  coordinates {(2,2) [SORT-style] (7.5,4.5) [End-to-end]};
+\addplot[only marks, color=famSH]  coordinates {(1,3) [GNN] (1.6,2.2) [SORT-family]};
+\addplot[only marks, color=famSM]  coordinates {(2.8,4.5) [JPDA] (3.4,5.3) [JIPDA] (4.2,6.2) [PMB / LMB]};
+\addplot[only marks, color=famMH]  coordinates {(6.2,7.4) [MHT] (6.6,8.3) [PMBM] (7.6,8.7) [$\delta$-GLMB]};
+\addplot[only marks, color=famIMP] coordinates {(1.3,4.1) [PHD] (2.6,5.6) [CPHD]};
+\addplot[only marks, color=famOUT] coordinates {(9,9) [TBD] (7.6,4.5) [End-to-end]};
 \end{axis}
 \end{tikzpicture}
-\caption{Illustrative cost--fidelity trade-off. Placement is subjective
-  and for orientation only; ``fidelity'' is not well defined for learned
+\caption{Illustrative cost--fidelity trade-off. Within the
+  detection-based families the ordering follows the approximation
+  ladder of Fig.~\ref{fig:funnel}. Placement is subjective and for
+  orientation only; ``fidelity'' is not well defined for learned
   trackers. \TODO{Replace with measured runtimes/accuracy if you have them.}}
 \label{fig:tradeoff}
 \end{figure}
 
 Taken together, the three lenses show that no family dominates: the
-best choice depends on clutter, target dynamics and available compute,
-which the final selection guide condenses.
+best choice depends on clutter, target dynamics and available compute.
+Because the blocks are independent, the choice is best made block by
+block, which the final guide does.
 
 % =====================================================================
-\subsection{Selection guide and implications for this project}
+\subsection{Design guide and implications for this project}
 \label{sec:selection}
 
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[
-  q/.style={draw, rounded corners, fill=black!6, font=\small, text width=6.2cm, align=center, minimum height=0.9cm},
-  r/.style={draw, rounded corners, font=\small, text width=3.6cm, align=center, minimum height=0.9cm},
-  a/.style={-{Latex[length=2mm]}, thick},
-  node distance=0.6cm and 1.2cm]
-\node[q] (q0) {Very low SNR / raw data available?};
-\node[q, below=of q0] (q1) {Rich appearance cues (e.g.\ EO video)?};
-\node[q, below=of q1] (q2) {Low clutter and well-separated targets?};
-\node[q, below=of q2] (q3) {Need to defer hard association decisions?};
-\node[r, fill=famTBD!30, right=of q0] (r0) {Track-before-detect};
-\node[r, fill=famDL!30,  right=of q1] (r1) {Learning-based (+ motion model)};
-\node[r, fill=famSH!30,  right=of q2] (r2) {GNN};
-\node[r, fill=famMH!30,  right=of q3] (r3) {MHT / PMBM};
-\node[r, fill=famRFS!30, below=of q3] (r4) {JPDA, or PHD / LMB if birth and death dominate};
-\foreach \i/\j in {0/1,1/2,2/3}{\draw[a] (q\i) -- node[left,font=\scriptsize]{no} (q\j);}
-\draw[a] (q3) -- node[left,font=\scriptsize]{no} (r4);
-\foreach \i in {0,1,2,3}{\draw[a] (q\i) -- node[above,font=\scriptsize]{yes} (r\i);}
-\end{tikzpicture}
-\caption{Selection guide. \TODO{Adjust branches after finalising the comparison; keep colours aligned with the families.}}
-\label{fig:selection}
-\end{figure}
+\begin{table}[t]
+\centering\small
+\caption{Design guide, one question per building block.
+  \TODO{Adjust after finalising the comparison; optionally condense into a flowchart.}}
+\label{tab:selection}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.3cm} X X}
+\toprule
+Block & Question & If yes, lean towards \\
+\midrule
+Front-end   & Very low SNR, and raw data available? & Track-before-detect \\
+Motion model & Manoeuvring targets? Training data for unusual dynamics? & IMM; learned motion model \\
+Association cost & Rich appearance cues (e.g.\ EO video)? & Add learned re-ID affinity to the kinematic cost \\
+Association decision & Frequent ambiguity (crossings, close spacing, clutter)? & Deferred (MHT, PMBM); otherwise marginal (JIPDA, PMB) or hard (GNN) \\
+Representation & Many hypotheses with long shared histories? & Track-oriented (TOMHT, PMBM) \\
+Existence   & Frequent births/deaths, long detection gaps, undetected targets? & Probabilistic existence, Poisson undetected model \\
+Complexity  & Hard real-time budget? & Gating and clustering always; then capping, small $k$, or marginalisation \\
+Multi-sensor & Heterogeneous or distributed sensors? & Centralised if bandwidth allows, else track-to-track fusion \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \paragraph{Implications for this project.}
-\TODO{Map the requirements of your own setting onto the guide: heterogeneous sensors, sparse and slow-moving targets, sea-return clutter, ground truth from AIS. State which family fits best and which are ruled out, and why.}
+\TODO{Walk through Table~\ref{tab:selection} for your own setting:
+heterogeneous sensors, sparse and slow-moving targets, sea-return
+clutter, ground truth from AIS. State the resulting recipe (one choice
+per block) and which options are ruled out, and why.}
 
 \paragraph{Summary.}
-\TODO{Two or three sentences: the axes that structure the field (association handling, target-count handling, input level) and what your project takes from it.}
+\TODO{Two or three sentences: a tracker is a recipe of interchangeable
+blocks; families differ in how many association hypotheses they keep,
+which is largely a complexity decision; RFS is a modelling framework
+that mainly improves the existence block; and what your project takes
+from this.}
