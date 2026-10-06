@@ -1,0 +1,36 @@
+\section{Random ideas}
+
+\begin{itemize}
+    \item For the AIS data, different models should be considered for different geographical places. E.g. in open water far from shore, a cv model with low acceleration and maneuvering noise should be considered while inside fjords, more maneuvering should be expected. Such values can probably be extracted from historical data.
+    \item This approach can also be applied to the type of ship that is being tracked. Don't know such information can be extracted from the AIS, such approaches in identifying particular ships may significantly aid the data association problem.
+\end{itemize}
+
+\subsection{AIS data}
+Summary of findings regarding the AIS data.
+\begin{enumerate}
+    \item The goal is to develop a simulation model based on some real AIS data that can be used as ground truth for further simulation of different sensors. For ground truth we need a smoothed track that relates position and time. Nice to have: Ship size, ship color, ship class.
+\end{enumerate}
+
+\subsection{Questions}
+\begin{enumerate}
+    \item Should ground truth be in lat/long or ENU/NED?
+    \item What needs to be included in the ground truth vector?
+\end{enumerate}
+
+\subsection{Til neste gang}
+\begin{enumerate}
+    \item EN-vector for coordinate system.
+    \item Utvilke sensormodeller for: 
+    \item Syntetisk Aperture Radar (SAR) (kan ha clutter)
+    \item NavigasjonsRadarDetektor (NRD) (usikkerhet forskjellig for hver måling) 
+    \item ElektroOptisk (EO)
+    \item AIS kan være input
+    \item Radar Deteksjons Sensor (RDS)
+\end{enumerate}
+
+Simen har gode prosjektoppgaver.
+
+\subsection{Sources}
+Maritime MTT proposition when noise is not Gaussian and models nonlinear. Built on JPDA and the Kalman filter
+https://ieeexplore.ieee.org/document/10925459
+
