@@ -16,8 +16,7 @@
 %   4. Complexity management is cross-cutting: one subsection, and each
 %      family is placed on the same "approximation ladder".
 %   5. One colour per family, reused in EVERY figure and table.
-%   6. One running example (Scenario S) reappears in the stress test.
-%   7. One question per artifact; each closes with a one-sentence hand-off.
+%   6. One question per artifact; each closes with a one-sentence hand-off.
 % =====================================================================
 
 % ---------- shared style: family colours, marks, helpers -------------
@@ -57,46 +56,28 @@
 \label{sec:mtt-overview}
 
 % ---- Opening + reading guide --------------------------------------
-Multi-target tracking (MTT) is the problem of estimating the number of
-targets and their states over time from noisy, incomplete and
-ambiguous sensor data. This section is organised around one idea:
-\emph{a tracker is assembled from interchangeable building blocks}, and
-the named methods in the literature are particular recipes of block
-choices. Section~\ref{sec:formulation} states the problem and why it is
-hard. Section~\ref{sec:anatomy} introduces the blocks and the options
-for each. Section~\ref{sec:complexity} shows that many of these options
-exist to manage combinatorial complexity. Section~\ref{sec:map} uses the
-blocks to draw a map of the field, and Section~\ref{sec:families}
-describes each family as a recipe. Section~\ref{sec:outside} covers
-methods that fuse or replace blocks. Section~\ref{sec:compare} compares
-the families, and Section~\ref{sec:selection} turns the comparison into
-design choices for this project. Colours identify families consistently
-throughout.
-\TODO{Trim this paragraph once the section is written; keep it as a roadmap.}
+Multi-target tracking (MTT) is the problem of estimating the number of targets and their states over time from noisy, incomplete and ambiguous sensor data. This section is organized around one idea: \emph{a tracker is assembled from interchangeable building blocks}, and the named methods in the literature result from particular block choices. Section~\ref{sec:formulation} states the problem and why it is hard. Section~\ref{sec:anatomy} introduces the blocks and the options for each. Section~\ref{sec:complexity} shows that many of these options exist to manage combinatorial complexity. Section~\ref{sec:map} uses the blocks to draw a map of the field, and Section~\ref{sec:families} describes each family in detail. Section~\ref{sec:outside} covers methods that do not fit completely into the standard pipeline. Section~\ref{sec:compare} compares the families, and Section~\ref{sec:selection} turns the comparison into design choices for this project. Colors identify families consistently throughout.
 
 % =====================================================================
 \subsection{Problem formulation}
 \label{sec:formulation}
+The following problem statement is based on the commonly used Detection Based Tracking (DBT) paradigm. This formulation assumes that a detector supplies detections of objects in a sensors field of view (FOV). Modelling clutter (false alarms) and probability of detection ($\PD$) less than one naturally comes from classical detection theory \cite{detection_theory}, where detecting noisy objects naturally leads to a tradeoff between clutter and $\PD$.
+\medskip
 
-Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of
-target states at time $k$, with $N_k$ unknown and time-varying, and
-$Z_k$ the set of measurements received. Each target survives with
-probability $\PS$ and evolves as
-$\mathbf{x}_{k+1}=f(\mathbf{x}_k)+\mathbf{w}_k$, and is detected with
-probability $\PD$, producing $\mathbf{z}_k=h(\mathbf{x}_k)+\mathbf{v}_k$.
-New targets appear according to a birth model. The set $Z_k$
-additionally contains clutter, and the origin of each measurement is
-unknown. \TODO{Fix notation here once and use it everywhere, including
-the RFS-based methods later. Define the association hypothesis
-$\theta_k$ here, since Sections~\ref{sec:anatomy}--\ref{sec:map} all
-refer to it.}
+Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of target states at time $k$, with $N_k$ unknown and time-varying. Each target survives with probability $\PS$ and evolves as $\mathbf{x}_{k+1}=f(\mathbf{x}_k)+\mathbf{w}_k$. Each target is detected with probability $\PD$, producing $\mathbf{z}_k=h(\mathbf{x}_k)+\mathbf{v}_k$. New targets appear according to a birth model. 
+\medskip
 
-\paragraph{Running example (Scenario S).}
-Two vessels on crossing courses, a third vessel joining the area,
-intermittent detections (varying sea state, sensor gaps) and sea-return
-clutter. Scenario~S is revisited in Section~\ref{sec:compare} to show
-where each family struggles.
-\TODO{Optional small figure of Scenario S (two crossing tracks + clutter points).}
+$Z_k = \{\mathbf{z}_k^{1},\dots,\mathbf{z}_k^{M_k} \bigcup \mathbf{C}_k\}$ is the set of measurements received.
+The set $Z_k$ contains both measurements generated by targets $\mathbf{z}_k^i$ and clutter $\mathbf{C}_k$, and the origin of each measurement is unknown. Clutter is generated according to a clutter model.
+\medskip
+
+MTT aims to estimate the optimal sequential states $X_{1:t}$, based on the measurements $Z_{1:t}$. This can be formulated as the following MAP (Maximum a posteriori) estimation problem as presented in \cite{mtt_litterary_review}.
+
+\begin{equation*}
+  \widehat{\mathbf{X}}_{1:t} = \operatorname*{arg\,max}_{\mathbf{X}_{1:t}} P\left(\mathbf{X}_{1:t} \mid \mathbf{Z}_{1:t}\right).
+\end{equation*}
+
+\textcite[Sec.~2]{mtt_litterary_review} then write that ``different MOT algorithms from previous works can now be thought as designing different approaches to solving the above MAP problem, either from a probabilistic inference perspective or a deterministic optimization perspective.''
 
 \begin{table}[t]
 \centering\small
@@ -116,9 +97,6 @@ Combinatorial explosion & The number of association hypotheses grows exponential
 \bottomrule
 \end{tabularx}
 \end{table}
-
-So far the problem; the next step is the decomposition of a tracker
-that these difficulties motivate.
 
 % =====================================================================
 \subsection{Anatomy of a tracker: interchangeable building blocks}
@@ -404,7 +382,7 @@ Monte Carlo / mixtures & Density representation & \xmark & Particle filters, SMC
 \paragraph{Clustering.} \TODO{Deserves a separate paragraph: it is the
 only reduction that is exact (given gating), it is what makes JPDA and
 MHT tractable in sparse scenes, and its benefit vanishes when targets
-are close. Relevant for Scenario~S (crossing vessels merge two clusters).}
+are close.}
 
 \paragraph{Approximation ladder.} \TODO{Close the subsection with the key
 insight: the families in Section~\ref{sec:map} can be ordered by how
@@ -701,15 +679,11 @@ Method & Target count & Identity & Cost & Key requirements & Multi-sensor \\
 \end{tabularx}
 \end{table}
 
-\subsubsection{Lens 2: failure modes on Scenario S}
-
-Table~\ref{tab:stress} maps each component of Scenario~S
-(Section~\ref{sec:formulation}) to how well each family copes.
+\subsubsection{Lens 2: failure modes}
 
 \begin{table}[t]
 \centering\small
-\caption{Qualitative robustness on the components of Scenario~S.
-  \TODO{Draft judgements only; back every cell with a citation or with your own simulation results.}}
+\caption{Qualitative robustness on known difficulties.}
 \label{tab:stress}
 \begin{tabular}{l c c c c c}
 \toprule
