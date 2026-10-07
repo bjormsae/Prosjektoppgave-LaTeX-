@@ -11,6 +11,13 @@
 \import{./}{title}
 
 % Defining front matter settings (Norsk: innstillinger for forord m.m.)
+\newpage
+\input{abstract}
+\thispagestyle{empty} %
+
+% TOC
+\newpage
+
 \frontmatter
 
 % Inserting table of contents
@@ -26,14 +33,26 @@
 % Introduction explaining this LaTeX-template
 \import{./Sections/}{Introduction}
 
-% Example section added from an external tex-file, here located in ./Sections/
-\import{./Sections/}{Example_section}
-
+\newpage
 \import{./Sections/}{mtt_overview}
 
+\newpage
 \import{./Sections/}{background_theory}
 
+\newpage
 \import{./Sections/}{method}
+
+\newpage
+\import{./Sections/}{results}
+
+\newpage
+\import{./Sections/}{discussion}
+
+\newpage
+\import{./Sections/}{further_work}
+
+\newpage
+\import{./Sections/}{conclusion}
 % Printing bibliography
 \newpage
 \printbibliography[heading = bibintoc, title = Bibliography]    % 'bibintoc' inserts our bibliography into the table of contents

@@ -61,7 +61,7 @@ Multi-target tracking (MTT) is the problem of estimating the number of targets a
 % =====================================================================
 \subsection{Problem formulation}
 \label{sec:formulation}
-The following problem statement is based on the commonly used Detection Based Tracking (DBT) paradigm. This formulation assumes that a detector supplies detections of objects in a sensors field of view (FOV). Modelling clutter (false alarms) and probability of detection ($\PD$) less than one naturally comes from classical detection theory \cite{detection_theory}, where detecting noisy objects naturally leads to a tradeoff between clutter and $\PD$.
+The following problem statement is based on the commonly used Detection Based Tracking (DBT) paradigm. This formulation assumes that a detector supplies detections of objects in a sensors field of view (FOV)\footnote{The addition of clutter (false alarms) and probability of detection ($\PD$) less than one arises naturally from classical detection theory, where detecting noisy objects leads to an inevitable tradeoff between lots of clutter and a high $\PD$ \cite{detection_theory}.}.
 \medskip
 
 Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of target states at time $k$, with $N_k$ unknown and time-varying. Each target survives with probability $\PS$ and evolves as $\mathbf{x}_{k+1}=f(\mathbf{x}_k)+\mathbf{w}_k$. Each target is detected with probability $\PD$, producing $\mathbf{z}_k=h(\mathbf{x}_k)+\mathbf{v}_k$. New targets appear according to a birth model. 
