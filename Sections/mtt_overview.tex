@@ -1,7 +1,4 @@
 % =====================================================================
-% mtt_overview.tex  --  Multi-target tracking: overview of the field
-% Include with \import{./Sections/}{mtt_overview} inside your report.
-%
 % DESIGN PRINCIPLES (why the section is built this way)
 %   1. Building blocks are the backbone. Every method is described as a
 %      "recipe": one choice per block. Blocks can be mixed and matched
@@ -77,108 +74,93 @@ MTT aims to estimate the optimal sequential states $X_{1:t}$, based on the measu
   \widehat{\mathbf{X}}_{1:t} = \operatorname*{arg\,max}_{\mathbf{X}_{1:t}} P\left(\mathbf{X}_{1:t} \mid \mathbf{Z}_{1:t}\right).
 \end{equation*}
 
-\textcite[Sec.~2]{mtt_litterary_review} then write that ``different MOT algorithms from previous works can now be thought as designing different approaches to solving the above MAP problem, either from a probabilistic inference perspective or a deterministic optimization perspective.''
+\textcite[Sec.~2]{mtt_litterary_review} then writes that ``different MOT algorithms from previous works can now be thought as designing different approaches to solving the above MAP problem, either from a probabilistic inference perspective or a deterministic optimization perspective.''
+\medskip
 
-\begin{table}[t]
+Tracking can also be split into online and batch methods. Online trackers process measurements recursively and will be the main focus of this overview. Batch methods process multiple sets of measurements and estimate the entire tracks jointly. \TODO{Maybe add that a lot of probabilistic inference is recursive and a lot of batch methods are optimization based. Need sources for this.}
+
+\subsubsection{Main problem difficulties}
+There are a handful of features which makes the MTT problem hard to solve. It is worth stating these explicitly, as the building blocks of an MTT algorithm are made to address different problems. \autoref{tab:challenges} lists the main difficulties and which parts of the tracker that addresses this difficulty.
+
+\begin{table}[htbp]
 \centering\small
-\caption{The core difficulties of MTT and the building block that
-  addresses each. This mapping is the bridge to the blocks in
-  Fig.~\ref{fig:pipeline}.}
+\caption{The core difficulties of MTT and the building block that addresses each.}
 \label{tab:challenges}
-\begin{tabularx}{\textwidth}{l X l}
+\begin{tabularx}{\textwidth}{X l}
 \toprule
-Difficulty & Consequence & Addressed by \\
+Difficulty & Addressed by \\
 \midrule
-Unknown target count   & Targets appear and disappear     & Existence (birth/death) \\
-Missed detections ($\PD<1$) & Gaps; targets may exist undetected & Prediction, existence \\
-Clutter                & Spurious measurements can start or corrupt tracks & Gating, association, existence \\
-Origin uncertainty     & Which measurement belongs to which target? & Data association \\
-Combinatorial explosion & The number of association hypotheses grows exponentially over time & Hypothesis management (Sec.~\ref{sec:complexity}) \\
+Unknown target count. The number of targets varies over time. & Existence, birth, death \\ \addlinespace
+Missed detections ($\PD<1$) & Prediction, existence \\ \addlinespace
+Clutter. Random measurements can create or corrupt tracks. & Gating, association, existence \\ \addlinespace
+Origin uncertainty. One cannot tell which measurement corresponds to which target, or if they are clutter. & Data association \\ \addlinespace
+Combinatorial explosion. Over time, the posterior will contain exponentially many hypotheses. & Hypothesis management (Sec.~\ref{sec:complexity}) \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 % =====================================================================
-\subsection{Anatomy of a tracker: interchangeable building blocks}
+\subsection{Anatomy of a tracker: the building blocks}
 \label{sec:anatomy}
 
-\begin{figure}[t]
+The following section will present the main building blocks of a multi target tracker. Note that the breakdown into blocks is most useful for describing online recursive tracking methods, which will become clear when characterizing named methods in literature based on block choices. Depending on the method, these blocks may be more or less intertwined or implicitly handled. This section will nonetheless express these blocks as easily interchangeable, since it can be a very useful abstraction. Thinking of a tracker in terms of building blocks is also useful since the blocks themselves tie back to the inherent difficulties of the tracking problem as presented in \autoref{tab:challenges}. All feasible algorithms aiming to solve the MTT problem, needs to address these difficulties in some way.
+
+\begin{figure}[htbp]
 \centering
+\providecommand{\exnote}[1]{\\[1pt]{\scriptsize\itshape\color{black!55}#1}}
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  box/.style={draw, rounded corners, minimum width=2.1cm, minimum height=0.9cm,
+  box/.style={draw, rounded corners, minimum width=2.1cm, minimum height=1.25cm,
               align=center, font=\small, fill=white},
   arr/.style={-{Latex[length=2mm]}, thick},
   node distance=0.7cm]
 \node[box] (fe)    {Front-end\\(detector)};
 \node[box, right=of fe]    (gate)  {Gating};
-\node[box, right=of gate]  (assoc) {Data\\association};
-\node[box, right=of assoc] (upd)   {State\\update};
-\node[box, right=of upd]   (ex)    {Existence\\(birth/death)};
-\node[box, below=1cm of assoc] (pred) {Prediction\\(motion model)};
-\node[right=0.5cm of ex, font=\small] (out) {Tracks};
+\node[box, right=of gate]  (assoc) {Data\\association\exnote{+ births}};
+\node[box, right=of assoc] (upd)   {State\\update\exnote{+ existence}};
+\node[box, right=of upd]   (red)   {Posterior reduction \\ (Hypothesis management)};
+\node[box, below=1cm of assoc] (pred) {Prediction\\(motion model)\exnote{+ survival}};
+\node[right=0.5cm of red, font=\small] (out) {Tracks};
 \draw[arr] (fe) -- (gate);
 \draw[arr] (gate) -- (assoc);
 \draw[arr] (assoc) -- (upd);
-\draw[arr] (upd) -- (ex);
-\draw[arr] (ex) -- (out);
-\draw[arr] (ex.south) |- (pred.east);
+\draw[arr] (upd) -- (red);
+\draw[arr] (red) -- (out);
+\draw[arr] (red.south) |- (pred.east);
 \draw[arr] (pred.west) -| (gate.south);
-\node[draw, dashed, rounded corners, fit=(assoc)(upd)(ex), inner sep=7pt,
-      label={[font=\scriptsize]above:hypothesis management: representation and reduction
-      (Sec.~\ref{sec:anatomy-hyp}, \ref{sec:complexity})}] {};
+\node[draw, dashed, rounded corners, fit=(assoc)(upd)(red), inner sep=7pt,
+      label={[font=\small]above:Inference}] {};
 \end{tikzpicture}}
-\caption{The building blocks of a tracker. Each box is a slot that can
-  be filled independently, with a classical or a learned component
-  (Table~\ref{tab:designspace}). The dashed layer is the bookkeeping that
-  decides how many association hypotheses are carried between scans.}
+\caption{The building blocks and information flow of a recursive tracker. Each box is a slot that in theory can be filled independently. The dashed layer indicates that the blocks inside are sometimes merged or handled implicitly. Target existence is not a separate stage. As the gray annotations show, it is handled throughout the cycle: survival in prediction, births from unassociated measurements and existence updates.}
 \label{fig:pipeline}
 \end{figure}
 
-Figure~\ref{fig:pipeline} introduces the vocabulary used for the rest of
-the section. The key property is \emph{modularity}: the blocks
-communicate through a small interface (predicted densities, gated
-measurement sets, association weights), so an option in one block can
-usually be combined with any option in another.
-Table~\ref{tab:designspace} lists the options per block. A concrete
-tracker is obtained by picking one entry per row, and
-Table~\ref{tab:recipes} in Section~\ref{sec:map} shows that the
-well-known methods are exactly such picks.
+\autoref{fig:pipeline} shows the building blocks and information flow of a recursive tracker. State predictions and detections are gated before doing inference. Inference is often broken down into data association, state update and hypothesis management. The leftover tracks are then predicted again until new detections arrive. Some factors like the sensor model has been omitted from the figure since it is used implicitly multiple places in the pipeline. \autoref{fig:pipeline} should therefore be seen in combination with \autoref{tab:designspace}, where each block has been decomposed into the actual choices that can be made for each block. \autoref{tab:designspace} then includes examples of both classical and learned options for each choice.
+\medskip
 
-\begin{table}[t]
+To illustrate the modularity of tracking algorithms we will present an example in the form of StrongSORT \cite{strongSORT}, which takes DeepSORT~\cite{deepSORT} and upgrades it one block at a time. In the terms of \autoref{tab:designspace}, DeepSORT combines a learned front-end (CNN detector) and a learned re-ID association cost with an otherwise classical back-end: a constant-velocity Kalman filter, Mahalanobis gating, hard association solved by Hungarian matching in a cascade, and a hit/miss counter for track confirmation and deletion. StrongSORT then replaces, one at a time, the re-ID network with a stronger one and the per-track feature bank with an exponential moving average of embeddings (association cost); the constant measurement noise with one scaled by detector confidence, $\tilde{R}_k = (1-c_k)R_k$ (sensor model: a learned quantity inside a classical filter); appearance-only matching with a weighted sum of appearance and kinematic cost (association cost); adds camera-motion compensation to the prediction (motion model); and replaces the matching cascade with a single global assignment (association solver). The mixed upgrades yielded a better performance when compared to DeepSORT, indicating that freely picking blocks not only works, but can increase performance. However, the paper also notes that the matching cascade increased performance in DeepSORT, but decreased it in StrongSORT, motivating the change. This illustrates that although one can pick blocks freely, the best option for one block may depend on the choices made for the others.
+
+\begin{table}[htbp]
 \centering\small
-\caption[Design space of a tracker.]{Design space of a tracker. Pick one option per row; options in
-  different rows can be combined freely. Learned options
-  (\textcolor{accLRN}{\textbf{red}}) are drop-in replacements, not a
-  separate family.}
+\caption{The blocks from \autoref{fig:pipeline} decomposed into design choices. Pick one option per row; options in different rows can be combined freely. The table includes examples of both classical and learned options for each block. Notice that data association has been decomposed (see \autoref{sec:anatomy-da}).}
 \label{tab:designspace}
 \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.4cm} X >{\raggedright\arraybackslash}p{4.0cm}}
 \toprule
 Block & Classical options & \textcolor{accLRN}{Learned options} \\
 \midrule
-Front-end      & Thresholding / CFAR detections; raw data (TBD) & CNN detectors (e.g.\ YOLO, CenterPoint) \\
-Motion model   & CV, CT, Singer; multiple models (IMM) & RNN/LSTM motion, learned dynamics \\
-Filter         & KF, EKF, UKF, particle filter, Gaussian mixtures & KalmanNet-style learned gain \\
-Sensor model   & Constant $\PD$ and clutter rate & Learned $\PD$ / clutter maps \\
-Gating         & Ellipsoidal (Mahalanobis), rectangular & Learned similarity thresholds \\
-Association cost & Kinematic likelihood & Appearance / re-ID embeddings, learned affinity \\
-Association decision & Hard, marginal (soft), deferred (multiple hypotheses) & (decided by the family, Sec.~\ref{sec:map}) \\
-Association solver & Hungarian, auction, Murty $k$-best, Gibbs sampling, LBP & GNN / attention-based matching \\
-Hypothesis repr.    & Track-oriented, hypothesis-oriented & -- \\
-Existence      & M-of-N, score thresholds, existence probability, Poisson undetected & Learned confidence scores \\
+Front-end      & Thresholding, raw data (TBD) & CNN detectors (e.g.\ YOLO \cite{yolo}, CenterPoint \cite{centerpoint}) \\ \addlinespace
+Sensor model   & Constant $\PD$ and clutter rate & Learned $\PD$ / clutter maps \\ \addlinespace
+Motion model   & CV, CT, multiple models (IMM) & RNN/LSTM motion, learned dynamics \\ \addlinespace
+Filter         & KF, EKF, UKF, particle filter, Gaussian mixtures & KalmanNet-style learned gain \cite{kalmannet} \\ \addlinespace
+Gating         & Ellipsoidal (Mahalanobis), rectangular & Learned similarity thresholds \\ \addlinespace
+Association cost & Kinematic likelihood \TODO{Maha?} & Appearance / re-ID embeddings, learned affinity \\ \addlinespace
+Association decision & Hard, marginal (soft), deferred (multiple hypotheses) & (decided by the family, Sec.~\ref{sec:map}) \\ \addlinespace
+Association solver & Hungarian \cite{hungarian}, auction, Murty $k$-best, Gibbs sampling, LBP & GNN / attention-based matching \\ \addlinespace
+Hypothesis repr. & Track-oriented, hypothesis-oriented & -- \\ \addlinespace
+Existence, birth, death & M-of-N, score thresholds, existence probability, Poisson undetected & Learned confidence scores \\
 \bottomrule
 \end{tabularx}
 \end{table}
-
-\paragraph{Mix and match in practice.}
-\TODO{Two to four short examples that make modularity concrete, e.g.\
-appearance features inside MHT (MHT revisited, Kim et al.\ 2015);
-PMBM run on CNN detections in autonomous driving; a learned motion
-model or learned Kalman gain inside a classical tracker (KalmanNet);
-DeepSORT = GNN + learned detector + learned re-ID. Verify each reference.}
-
-The blocks are now described one by one, at the level needed to read
-the map in Section~\ref{sec:map}.
 
 \subsubsection{Front-end: detections or raw data}
 \TODO{Most trackers consume thresholded point detections. Extended
@@ -210,7 +192,7 @@ can be solved exactly or approximately (Table~\ref{tab:solvers}). The
 solver is again an interchangeable part: the same tracker can switch
 from Murty's algorithm to Gibbs sampling without changing its model.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \caption{Association problems and their exact and approximate solvers.
   \TODO{Verify complexity statements and add references.}}
@@ -244,7 +226,7 @@ first, track-oriented MHT and PMBM use the second.
 \TODO{Explain why track-oriented storage scales better (shared
 single-target hypotheses), and that it enables N-scan pruning per track.}
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering\small
 \begin{minipage}[t]{0.44\textwidth}\centering
 \textbf{Hypothesis-oriented}\par\medskip
@@ -286,7 +268,7 @@ questions: when does a target start, when does it end, and can a target
 exist without ever having been detected? Each can be answered
 heuristically or probabilistically (Table~\ref{tab:existence}).
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \caption{Heuristic and probabilistic options for the existence block.
   The two columns can be mixed, e.g.\ probabilistic termination with
@@ -328,7 +310,7 @@ that look like modelling decisions are really complexity decisions.
 \TODO{One sentence with the growth rate, e.g.\ the number of
 single-scan association events for $n$ targets and $m$ measurements.}
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
   st/.style={draw, rounded corners=2pt, minimum height=0.62cm, font=\small,
@@ -355,7 +337,7 @@ single-scan association events for $n$ targets and $m$ measurements.}
 \label{fig:funnel}
 \end{figure}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \caption{Complexity-management techniques, what they bound, and where
   they are used. \TODO{Verify the ``used by'' column.}}
@@ -409,7 +391,7 @@ MHT than to the PHD filter, and PMB and LMB are close relatives of
 JIPDA. \TODO{Cite the papers that make these links explicit (Williams
 on PMB vs.\ JIPDA; Garc\'ia-Fern\'andez et al.\ on PMBM vs.\ $\delta$-GLMB).}
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering\small
 \renewcommand{\arraystretch}{1.35}
 \begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.6cm}}
@@ -447,7 +429,7 @@ Table~\ref{tab:recipes} makes the building-block view explicit by
 listing the choices each named method makes. Front-end, motion model and
 filter are omitted because every method accepts any choice there.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\footnotesize
 \caption{Named methods as recipes of block choices.
   \TODO{Verify each cell against the original papers.}}
@@ -474,7 +456,7 @@ Method & Decision & Solver & Storage & Existence & RFS \\
 Figure~\ref{fig:lineage} adds time, showing which methods were derived
 from which.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
@@ -587,7 +569,7 @@ which blocks they \emph{fuse} into one operation and which they
 \emph{replace} (Fig.~\ref{fig:rewired}). This keeps them on the same
 map: each strip shows what is gained and what modularity is lost.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
@@ -659,7 +641,7 @@ Three lenses are used in turn: \emph{what each method assumes},
 
 \subsubsection{Lens 1: assumptions and outputs}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \caption{Assumptions and outputs by method. \TODO{Verify each cell against the cited sources.}}
 \label{tab:compare}
@@ -681,7 +663,7 @@ Method & Target count & Identity & Cost & Key requirements & Multi-sensor \\
 
 \subsubsection{Lens 2: failure modes}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \caption{Qualitative robustness on known difficulties.}
 \label{tab:stress}
@@ -704,7 +686,7 @@ End-to-end          & \fair   & \weak   & \fair   & \weak   & \fair \\
 
 \subsubsection{Lens 3: cost versus fidelity}
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
 \begin{axis}[width=0.85\textwidth, height=6.5cm, xmin=0, xmax=10, ymin=0, ymax=10,
@@ -738,7 +720,7 @@ block, which the final guide does.
 \subsection{Design guide and implications for this project}
 \label{sec:selection}
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering\small
 \caption{Design guide, one question per building block.
   \TODO{Adjust after finalising the comparison; optionally condense into a flowchart.}}
