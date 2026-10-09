@@ -79,7 +79,7 @@ MTT aims to estimate the optimal sequential states $X_{1:t}$, based on the measu
 
 Tracking can also be split into online and batch methods. Online trackers process measurements recursively and will be the main focus of this overview. Batch methods process multiple sets of measurements and estimate the entire tracks jointly. \TODO{Maybe add that a lot of probabilistic inference is recursive and a lot of batch methods are optimization based. Need sources for this.}
 
-\subsubsection{Main problem difficulties}
+\subsubsection{Why is MTT difficult?}
 There are a handful of features which makes the MTT problem hard to solve. It is worth stating these explicitly, as the building blocks of an MTT algorithm are made to address different problems. \autoref{tab:challenges} lists the main difficulties and which parts of the tracker that addresses this difficulty.
 
 \begin{table}[htbp]
@@ -150,47 +150,60 @@ Block & Classical options & \textcolor{accLRN}{Learned options} \\
 \midrule
 Front-end      & Thresholding, raw data (TBD) & CNN detectors (e.g.\ YOLO \cite{yolo}, CenterPoint \cite{centerpoint}) \\ \addlinespace
 Sensor model   & Constant $\PD$ and clutter rate & Learned $\PD$ / clutter maps \\ \addlinespace
-Motion model   & CV, CT, multiple models (IMM) & RNN/LSTM motion, learned dynamics \\ \addlinespace
-Filter         & KF, EKF, UKF, particle filter, Gaussian mixtures & KalmanNet-style learned gain \cite{kalmannet} \\ \addlinespace
+Motion model   & CV, CT, multiple models (IMM) & DiffMOT; learned dynamics \cite{learned_motion} \\ \addlinespace
+Filter         & KF, EKF, UKF, particle filter & KalmanNet-style learned gain \cite{kalmannet} \\ \addlinespace
 Gating         & Ellipsoidal (Mahalanobis), rectangular & Learned similarity thresholds \\ \addlinespace
-Association cost & Kinematic likelihood \TODO{Maha?} & Appearance / re-ID embeddings, learned affinity \\ \addlinespace
+Association cost & Kinematic likelihood; Mahalanobis & Appearance / re-ID embeddings, learned affinity \\ \addlinespace
 Association decision & Hard, marginal (soft), deferred (multiple hypotheses) & (decided by the family, Sec.~\ref{sec:map}) \\ \addlinespace
-Association solver & Hungarian \cite{hungarian}, auction, Murty $k$-best, Gibbs sampling, LBP & GNN / attention-based matching \\ \addlinespace
-Hypothesis repr. & Track-oriented, hypothesis-oriented & -- \\ \addlinespace
+Association solver & Hungarian \cite{hungarian}, auction \cite{auction}, Murty $k$-best \cite{Murty}, Gibbs sampling \cite{gibbs_glmb}, LBP \cite{loopy_belief_prop} & Learnable graph matching \cite{learnable_graph_match} \\ \addlinespace
+Hypothesis representation & Track-oriented, hypothesis-oriented & -- \\ \addlinespace
 Existence, birth, death & M-of-N, score thresholds, existence probability, Poisson undetected & Learned confidence scores \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \subsubsection{Front-end: detections or raw data}
-\TODO{Most trackers consume thresholded point detections. Extended
-targets (several measurements per target) and raw-data input (TBD,
-Sec.~\ref{sec:outside}) change this block. Classical vs.\ learned detectors.}
+Points to make:
+\begin{itemize}
+    \item The tracking algorithm we design is only as good as the detectors we use.
+    \item Many modern image detectors can provide feature information alongside the detections. See re-ID.
+    \item Do the detectors provide multiple detections for the same object? Important to know if we must use extended object tracking or not
+    \item The classic split between track by detect and track before detect.
+\end{itemize}
+
+\subsubsection{Sensor model}
+Points to make:
+\begin{itemize}
+    \item Components: state to measurement function, clutter distribution, $P_D$.
+    \item Changing $P_D$ can improve performance when objects are occluded. 
+    \item Knowing where clutter is likely is very powerful for gating and data association.
+\end{itemize}
 
 \subsubsection{Motion model and filter}
-\TODO{CV/CT, IMM; KF, EKF, UKF, PF; when each applies. Learned motion
-models as drop-in replacements. This block is single-target and is
-reused unchanged by every family.}
+Points to make:
+\begin{itemize}
+    \item Classically built upon the Kalman filter for processing sequential measurements. The usual motion models (CV, CT, IMM)
+    \item Can extend the filter by using EKF, UKF or particle filtering.
+    \item Can extend further to state prediction by deep learning.
+\end{itemize}
 
 \subsubsection{Gating}
-\TODO{Validation regions (Mahalanobis distance); trade-off between missed
-and false associations. Point forward: gating is the first complexity
-reduction step (Sec.~\ref{sec:complexity}).}
+Points to make:
+\begin{itemize}
+    \item Important to reduce computational complexity
+    \item Remove very unlikely associations before combinatory is involved.
+    \item Can be simple distance heuristics or complex probability based methods.
+\end{itemize}
 
 \subsubsection{Data association}
 \label{sec:anatomy-da}
-Data association has two independent sub-choices: \emph{what} is decided
-and \emph{how} the resulting optimisation is solved.
-
-\paragraph{What is decided.} \TODO{Hard (commit to one assignment),
-marginal/soft (weight measurements by association probabilities and keep
-one hypothesis), or deferred (keep several global hypotheses). This
-choice defines the families in Section~\ref{sec:map}.}
-
-\paragraph{How it is solved.} Each decision type leads to a problem that
-can be solved exactly or approximately (Table~\ref{tab:solvers}). The
-solver is again an interchangeable part: the same tracker can switch
-from Murty's algorithm to Gibbs sampling without changing its model.
+Points to make:
+\begin{itemize}
+    \item What is decided: Hard (commit to one assignment), marginal/soft (weight measurements by association probabilities and keep one hypothesis), or deferred (keep several global hypotheses).
+    \item How is the cost of association for the optimization algorithm decided?
+    \item How is it solved: Approximately or exact (computational cost vs correctness)
+    \item Some trackers do not use such solvers. Some have implicit data association (PHD) and end to end deep learning algorithms also handle association implicitly.
+\end{itemize}
 
 \begin{table}[htbp]
 \centering\small
@@ -209,22 +222,16 @@ Multi-frame assignment (N-scan MHT, batch) & Integer programming (NP-hard for $\
 \end{tabularx}
 \end{table}
 
-\paragraph{Association cost.} \TODO{Kinematic likelihood vs.\ learned
-appearance affinity; how they are combined. Again independent of the
-decision and solver.}
-
 \subsubsection{Hypothesis representation}
 \label{sec:anatomy-hyp}
-When several hypotheses are kept, they can be stored in two ways
-(Fig.~\ref{fig:hyprep}). In a \emph{hypothesis-oriented} representation
-each global hypothesis carries its own complete set of tracks. In a
-\emph{track-oriented} representation each potential target keeps a tree
-of single-target hypotheses, and a global hypothesis is only a look-up
-of one leaf per target. The distinction is independent of the
-modelling framework: hypothesis-oriented MHT and $\delta$-GLMB use the
-first, track-oriented MHT and PMBM use the second.
-\TODO{Explain why track-oriented storage scales better (shared
-single-target hypotheses), and that it enables N-scan pruning per track.}
+Points to make:
+\begin{itemize}
+    \item Only relevant when several hypotheses are kept.
+    \item When several hypotheses are kept, they can be stored in two ways. The distinction is mainly important for implementation.
+    \item In a hypothesis-oriented representation each global hypothesis carries its own complete set of tracks.
+    \item In a track-oriented representation each potential target keeps a tree of single-target hypotheses, and a global hypothesis is only a look-up of one leaf per target.
+    \item Explain how track-oriented storage works and why it scales better. And how it improves pruning as well.
+\end{itemize}
 
 \begin{figure}[htbp]
 \centering\small
@@ -263,10 +270,14 @@ $3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
 
 \subsubsection{Existence: birth, death and undetected targets}
 \label{sec:anatomy-existence}
-Target count is handled by a dedicated block that answers three
-questions: when does a target start, when does it end, and can a target
-exist without ever having been detected? Each can be answered
-heuristically or probabilistically (Table~\ref{tab:existence}).
+Points to make:
+\begin{itemize}
+    \item Binary existence, example; existence represented by a single hypothesis and existence probabilities (LMB) or multiple hypotheses and binary existence (GLMB)
+    \item Birth to handle new targets arriving in the surveillance area; birth models
+    \item Death (survival) used to terminate objects that leave the area or erroneous tracks.
+    \item Low probability targets recycled back into the birth intensity (PMBM)
+    \item Heuristics vs probabilistic approaches to the problems.
+\end{itemize}
 
 \begin{table}[htbp]
 \centering\small
@@ -285,18 +296,6 @@ Undetected targets & Not represented & Poisson intensity of undetected targets (
 \bottomrule
 \end{tabularx}
 \end{table}
-
-\TODO{Note that the MHT track score is a probabilistic quantity with a
-heuristic threshold, i.e.\ the boundary is gradual. Point out that
-the RFS framework mainly contributes here: it gives birth, death and
-undetected targets a principled model.}
-
-\subsubsection{Multi-sensor fusion}
-\TODO{Centralised (measurement-level) vs.\ distributed (track-to-track);
-asynchronous sensors; sensor bias/registration. Orthogonal to all other blocks.}
-
-With the blocks defined, the next question is why so many of the options
-in Table~\ref{tab:designspace} are approximations.
 
 % =====================================================================
 \subsection{Managing complexity}
