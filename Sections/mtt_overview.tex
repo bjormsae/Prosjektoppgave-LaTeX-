@@ -4,14 +4,16 @@
 %      "recipe": one choice per block. Blocks can be mixed and matched
 %      (classical or learned), and even methods that do not fit the
 %      pipeline are described by WHICH blocks they fuse or replace.
-%   2. Funnel: problem -> blocks -> complexity -> map -> families ->
-%      methods outside the pipeline -> comparison -> choice.
+%   2. Funnel: problem -> blocks -> complexity -> multiple sensors ->
+%      map -> families -> methods outside the pipeline -> comparison
+%      and design guide.
 %   3. Families are defined by ONE axis: how many association hypotheses
 %      are kept. RFS is a modelling framework (a column in the map), not
 %      a family, so PMBM sits next to track-oriented MHT, delta-GLMB next
 %      to hypothesis-oriented MHT, and PMB/LMB next to JIPDA.
-%   4. Complexity management is cross-cutting: one subsection, and each
-%      family is placed on the same "approximation ladder".
+%   4. Complexity management and multi-sensor handling are cross-cutting:
+%      one subsection each, and each family is placed on the same
+%      "approximation ladder".
 %   5. One colour per family, reused in EVERY figure and table.
 %   6. One question per artifact; each closes with a one-sentence hand-off.
 % =====================================================================
@@ -24,15 +26,9 @@
 \definecolor{famMH}{HTML}{F58518}   % multiple hypotheses (MHT, PMBM, delta-GLMB)
 \definecolor{famOUT}{HTML}{B279A2}  % methods that rewire the pipeline (TBD, R-RANSAC, end-to-end)
 \definecolor{accLRN}{HTML}{E45756}  % accent: learned component (not a family!)
-\definecolor{cStrong}{HTML}{C7E9C0}
-\definecolor{cFair}{HTML}{FFF2AE}
-\definecolor{cWeak}{HTML}{F4B6B6}
 
 \providecommand{\cmark}{\ding{51}}
 \providecommand{\xmark}{\ding{55}}
-\newcommand{\strong}{\cellcolor{cStrong}Strong}
-\newcommand{\fair}{\cellcolor{cFair}Fair}
-\newcommand{\weak}{\cellcolor{cWeak}Weak}
 \newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 \newcommand{\PD}{P_{\mathrm{D}}}
 \newcommand{\PS}{P_{\mathrm{S}}}
@@ -53,7 +49,7 @@
 \label{sec:mtt-overview}
 
 % ---- Opening + reading guide --------------------------------------
-Multi-target tracking (MTT) is the problem of estimating the number of targets and their states over time from noisy, incomplete and ambiguous sensor data. This section is organized around one idea: \emph{a tracker is assembled from interchangeable building blocks}, and the named methods in the literature result from particular block choices. Section~\ref{sec:formulation} states the problem and why it is hard. Section~\ref{sec:anatomy} introduces the blocks and the options for each. Section~\ref{sec:complexity} shows that many of these options exist to manage combinatorial complexity. Section~\ref{sec:map} uses the blocks to draw a map of the field, and Section~\ref{sec:families} describes each family in detail. Section~\ref{sec:outside} covers methods that do not fit completely into the standard pipeline. Section~\ref{sec:compare} compares the families, and Section~\ref{sec:selection} turns the comparison into design choices for this project. Colors identify families consistently throughout.
+Multi-target tracking (MTT) is the problem of estimating the number of targets and their states over time from noisy, incomplete and ambiguous sensor data. This section is organized around one idea: \emph{a tracker is assembled from interchangeable building blocks}, and the named methods in the literature result from particular block choices. Section~\ref{sec:formulation} states the problem and why it is hard. Section~\ref{sec:anatomy} introduces the blocks and the options for each. Section~\ref{sec:complexity} shows that many of these options exist to manage combinatorial complexity, and Section~\ref{sec:multisensor} covers the second concern that cuts across the blocks: combining data from several sensors. Section~\ref{sec:map} uses the blocks to draw a map of the field, and Section~\ref{sec:families} describes each family in detail. Section~\ref{sec:outside} covers methods that do not fit completely into the standard pipeline. Section~\ref{sec:selection} compares the families and turns the comparison into design choices for this project. Colors identify families consistently throughout.
 
 % =====================================================================
 \subsection{Problem formulation}
@@ -368,10 +364,78 @@ are close.}
 \paragraph{Approximation ladder.} \TODO{Close the subsection with the key
 insight: the families in Section~\ref{sec:map} can be ordered by how
 early in Fig.~\ref{fig:funnel} they collapse the hypothesis space. This
-explains the cost--fidelity ordering in Fig.~\ref{fig:tradeoff}.}
+explains why cost and fidelity increase together from one family to the
+next.}
 
-The block options and the complexity reductions together give the axes
-for a map of the field.
+Complexity is one of two concerns that cut across the blocks. The other
+is how to combine data from more than one sensor.
+
+% =====================================================================
+\subsection{Multiple sensors}
+\label{sec:multisensor}
+
+The pipeline in \autoref{fig:pipeline} describes a single sensor. Adding
+sensors, for example a radar and an electro-optical camera, brings more
+information, but it is not a block of its own. It changes how several
+existing blocks are used and adds one new choice: where in the pipeline
+the sensors are combined.
+
+\paragraph{What changes for each sensor.} Every sensor $s$ comes with
+its own sensor model: a measurement function $h_s$, noise covariance
+$R_s$, detection probability $\PD^{s}$ and clutter model (Section~\ref{sec:anatomy}).
+The tracker must apply the right model to each measurement, since sensors
+differ in dimension, accuracy and false-alarm behaviour. Two practical
+requirements follow. Measurements must be expressed in a common frame,
+which requires the sensors to be registered to each other \TODO{cite}.
+Sensors also rarely report at the same time, so the motion model must
+support arbitrary time steps, and measurements that arrive late must be
+handled \TODO{cite out-of-sequence measurement handling}.
+
+\paragraph{Where the sensors are combined.} Three architectures cover
+most of the literature (\autoref{tab:multisensor}). The choice is about
+which association problem has to be solved, so it ties back to the
+solvers in \autoref{tab:solvers}.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Where sensors can be combined.
+  \TODO{Verify the statements and add references.}}
+\label{tab:multisensor}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{3.8cm} X X}
+\toprule
+Architecture & Association problem & Strength & Weakness \\
+\midrule
+Centralised, sequential
+  & One single-sensor problem per scan, solved in turn
+  & Same cost as a single sensor; handles asynchronous scans naturally
+  & Truncation after one sensor (pruning, marginalisation) can discard hypotheses a later sensor would have supported, so the result depends on the order \\ \addlinespace
+Centralised, joint
+  & One multi-dimensional assignment over simultaneous scans (NP-hard for three or more sensors)
+  & Keeps all cross-sensor evidence
+  & Cost grows quickly with the number of sensors; needs simultaneous scans or approximations (e.g.\ Gibbs sampling) \\ \addlinespace
+Distributed (track-level)
+  & Track-to-track association, then fusion of local tracks
+  & Low bandwidth; modular; local trackers may differ
+  & Discards measurement-level information; local tracks have correlated errors, so naive fusion is overconfident (covariance intersection is one remedy) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Relation to the families.} The architecture can in principle
+be chosen independently of the family. Any recursive tracker can process
+sensor scans sequentially, because each scan is just another set of
+measurements with its own sensor model. In the exact Bayes recursion,
+sequential and joint updates agree when the sensors are conditionally
+independent given the targets. The family matters through cost and
+through how much a truncation between sensors can lose, which is why
+\autoref{fig:taxonomy} treats multi-sensor handling as orthogonal to the
+families. For PHD-type filters the sequential update is itself an
+approximation that depends on the order of the sensors
+\TODO{cite iterated-corrector PHD/CPHD}. Multi-sensor extensions of the
+multi-hypothesis filters exist \TODO{cite, e.g.\ multi-sensor GLMB}.
+
+With the blocks and the two cross-cutting concerns in place, the methods
+can be placed on a map of the field.
 
 % =====================================================================
 \subsection{A map of the field}
@@ -413,7 +477,7 @@ Association hypotheses kept & Vector-based (classical) & Set-based (RFS) \\
   & \cellcolor{famMH!12}Track-oriented MHT (TOMHT)
   & \cellcolor{famMH!12}PMBM \\
 \midrule
-\multicolumn{3}{p{11.8cm}}{\emph{Orthogonal to every cell:} front-end (detections or raw data), learned components, multi-sensor architecture.} \\
+\multicolumn{3}{p{11.8cm}}{\emph{Orthogonal to every cell:} front-end (detections or raw data), learned components, multi-sensor architecture (Sec.~\ref{sec:multisensor}).} \\
 \multicolumn{3}{p{11.8cm}}{\emph{Outside the grid:} methods that fuse or replace blocks (Sec.~\ref{sec:outside}, colour \textcolor{famOUT}{\textbf{purple}}).} \\
 \bottomrule
 \end{tabular}
@@ -451,69 +515,6 @@ Method & Decision & Solver & Storage & Existence & RFS \\
 \bottomrule
 \end{tabularx}
 \end{table}
-
-Figure~\ref{fig:lineage} adds time, showing which methods were derived
-from which.
-
-\begin{figure}[htbp]
-\centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[
-  n/.style={draw, rounded corners, font=\scriptsize, minimum height=6mm, inner sep=3pt, align=center},
-  rfs/.style={double, double distance=1pt},
-  lane/.style={font=\scriptsize\bfseries, anchor=east, align=right},
-  a/.style={-{Latex[length=1.5mm]}, thick},
-  d/.style={-{Latex[length=1.5mm]}, dashed}]
-% lanes
-\node[lane, text=famSH]  at (-0.8, 0)   {Hard};
-\node[lane, text=famSM]  at (-0.8,-1.2) {Marginal};
-\node[lane, text=famMH]  at (-0.8,-2.4) {Multiple};
-\node[lane, text=famIMP] at (-0.8,-3.6) {Implicit};
-\node[lane, text=famOUT] at (-0.8,-4.8) {Outside};
-% hard
-\node[n, fill=famSH!25]  (gnn)   at (0.5,0)   {GNN};
-\node[n, fill=famSH!25]  (sort)  at (11,0)    {SORT '16};
-\node[n, fill=famSH!25]  (dsort) at (13,0)    {DeepSORT '17};
-\node[n, fill=famSH!25]  (byte)  at (15.2,0)  {ByteTrack '22};
-% marginal
-\node[n, fill=famSM!25]  (pda)   at (0.5,-1.2) {PDA '75};
-\node[n, fill=famSM!25]  (jpda)  at (2.5,-1.2) {JPDA '83};
-\node[n, fill=famSM!25]  (ipda)  at (4.5,-1.2) {IPDA '94};
-\node[n, fill=famSM!25]  (jipda) at (6.5,-1.2) {JIPDA '04};
-\node[n, fill=famSM!25, rfs] (lmb) at (9,-1.2)  {LMB '14};
-\node[n, fill=famSM!25, rfs] (pmb) at (11,-1.2) {PMB '15};
-% multiple
-\node[n, fill=famMH!25]  (homht) at (1.5,-2.4) {HOMHT '79};
-\node[n, fill=famMH!25]  (tomht) at (4,-2.4)   {TOMHT '90};
-\node[n, fill=famMH!25, rfs] (glmb) at (9,-2.4)  {$\delta$-GLMB '13};
-\node[n, fill=famMH!25, rfs] (pmbm) at (11,-2.4) {PMBM '15};
-% implicit
-\node[n, fill=famIMP!25, rfs] (phd)  at (6.5,-3.6) {PHD '03};
-\node[n, fill=famIMP!25, rfs] (cphd) at (8.5,-3.6) {CPHD '07};
-% outside
-\node[n, fill=famOUT!25] (tbd)   at (2,-4.8)    {TBD (DP) '85};
-\node[n, fill=famOUT!25] (flow)  at (8.5,-4.8)  {Network flow '08};
-\node[n, fill=famOUT!25] (rr)    at (11,-4.8)   {R-RANSAC '14};
-\node[n, fill=famOUT!25] (trf)   at (15.2,-4.8) {Transformers '22};
-% derivations
-\draw[a] (gnn)--(sort); \draw[a] (sort)--(dsort); \draw[a] (dsort)--(byte);
-\draw[a] (pda)--(jpda); \draw[a] (jpda) to[bend left=20] (jipda); \draw[a] (ipda)--(jipda);
-\draw[a] (homht)--(tomht);
-\draw[a] (phd)--(cphd);
-\draw[a] (glmb)--(lmb); \draw[a] (pmbm)--(pmb);
-% conceptual links
-\draw[d] (tomht) to[bend right=12] (pmbm);
-\draw[d] (homht) to[bend right=14] (glmb);
-\draw[d] (jipda) to[bend left=14] (pmb);
-\draw[d] (dsort) to[bend left=10] (trf);
-\draw[-{Latex}, thick] (0,-5.6) -- node[below,font=\scriptsize]{time} (16,-5.6);
-\end{tikzpicture}}
-\caption{Lineage of methods, one lane per family (colours as in
-  Fig.~\ref{fig:taxonomy}); RFS-based methods have a double border.
-  Solid: derived from. Dashed: conceptual link across frameworks (same
-  association structure). \TODO{Verify every year and arrow against the sources.}}
-\label{fig:lineage}
-\end{figure}
 
 % =====================================================================
 \subsection{The families in detail}
@@ -632,13 +633,13 @@ With all methods placed on the same vocabulary, they can be compared
 on common criteria.
 
 % =====================================================================
-\subsection{Comparing the families}
-\label{sec:compare}
+\subsection{Comparison and design guide}
+\label{sec:selection}
 
-Three lenses are used in turn: \emph{what each method assumes},
-\emph{when it breaks}, and \emph{what it costs}.
-
-\subsubsection{Lens 1: assumptions and outputs}
+The families are compared on what each method assumes and what it
+outputs (\autoref{tab:compare}). Failure modes are described under
+\emph{Limits} in Section~\ref{sec:families}, and cost follows from where
+a family stops on the approximation ladder (Section~\ref{sec:complexity}).
 
 \begin{table}[htbp]
 \centering\small
@@ -660,64 +661,10 @@ Method & Target count & Identity & Cost & Key requirements & Multi-sensor \\
 \end{tabularx}
 \end{table}
 
-\subsubsection{Lens 2: failure modes}
-
-\begin{table}[htbp]
-\centering\small
-\caption{Qualitative robustness on known difficulties.}
-\label{tab:stress}
-\begin{tabular}{l c c c c c}
-\toprule
-Method & Crossing & Dense clutter & Close spacing & Low $\PD$ & Birth/death \\
-\midrule
-GNN                 & \weak   & \weak   & \weak   & \fair   & \weak \\
-SORT-family         & \fair   & \weak   & \fair   & \weak   & \fair \\
-JPDA, JIPDA         & \fair   & \fair   & \weak   & \fair   & \fair \\
-PMB, LMB            & \fair   & \fair   & \fair   & \fair   & \strong \\
-MHT                 & \strong & \fair   & \strong & \strong & \fair \\
-PMBM, $\delta$-GLMB & \strong & \fair   & \strong & \strong & \strong \\
-PHD/CPHD            & \fair   & \fair   & \weak   & \fair   & \strong \\
-TBD                 & \fair   & \strong & \fair   & \strong & \fair \\
-End-to-end          & \fair   & \weak   & \fair   & \weak   & \fair \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsubsection{Lens 3: cost versus fidelity}
-
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}
-\begin{axis}[width=0.85\textwidth, height=6.5cm, xmin=0, xmax=10, ymin=0, ymax=10,
-  xlabel={Computational cost (qualitative)},
-  ylabel={Posterior fidelity (qualitative)},
-  xtick=\empty, ytick=\empty, axis lines=left,
-  nodes near coords, point meta=explicit symbolic,
-  every node near coord/.append style={font=\scriptsize, anchor=west, xshift=2pt},
-  mark=*]
-\addplot[only marks, color=famSH]  coordinates {(1,3) [GNN] (1.6,2.2) [SORT-family]};
-\addplot[only marks, color=famSM]  coordinates {(2.8,4.5) [JPDA] (3.4,5.3) [JIPDA] (4.2,6.2) [PMB / LMB]};
-\addplot[only marks, color=famMH]  coordinates {(6.2,7.4) [MHT] (6.6,8.3) [PMBM] (7.6,8.7) [$\delta$-GLMB]};
-\addplot[only marks, color=famIMP] coordinates {(1.3,4.1) [PHD] (2.6,5.6) [CPHD]};
-\addplot[only marks, color=famOUT] coordinates {(9,9) [TBD] (7.6,4.5) [End-to-end]};
-\end{axis}
-\end{tikzpicture}
-\caption{Illustrative cost--fidelity trade-off. Within the
-  detection-based families the ordering follows the approximation
-  ladder of Fig.~\ref{fig:funnel}. Placement is subjective and for
-  orientation only; ``fidelity'' is not well defined for learned
-  trackers. \TODO{Replace with measured runtimes/accuracy if you have them.}}
-\label{fig:tradeoff}
-\end{figure}
-
-Taken together, the three lenses show that no family dominates: the
-best choice depends on clutter, target dynamics and available compute.
-Because the blocks are independent, the choice is best made block by
-block, which the final guide does.
-
-% =====================================================================
-\subsection{Design guide and implications for this project}
-\label{sec:selection}
+No family dominates: the best choice depends on clutter, target dynamics
+and available compute. Because the blocks are independent, the choice is
+best made block by block, which \autoref{tab:selection} does with one
+question per block.
 
 \begin{table}[htbp]
 \centering\small
