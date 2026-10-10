@@ -32,10 +32,26 @@
 \newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 \newcommand{\PD}{P_{\mathrm{D}}}
 \newcommand{\PS}{P_{\mathrm{S}}}
-% Same structure for every family description:
-\newcommand{\familycard}[5]{\par\noindent
-  \textbf{Idea.} #1 \textbf{Recipe.} #2 \textbf{Assumes.} #3
-  \textbf{Limits.} #4 \textbf{Typical use.} #5\par\smallskip}
+% Same structure for every family description. A shaded card per family:
+% #1 family colour, #2 title, #3 idea, #4 recipe, #5 assumes, #6 limits, #7 typical use.
+% Rows use a hanging label column so longer texts stay aligned and the card can break over pages.
+\newlength{\famlabelw}\setlength{\famlabelw}{2.35cm}
+\newcommand{\famrow}[2]{\par\noindent\hangindent=\famlabelw\hangafter=1
+\makebox[\famlabelw][l]{\textcolor{famcard!60!black}{\bfseries #1}}#2\par}
+\newcommand{\familycard}[7]{%
+\begingroup\colorlet{famcard}{#1}%
+\begin{tcolorbox}[enhanced, breakable, sharp corners, boxrule=0pt, frame hidden,
+      colback=white, borderline west={3pt}{0pt}{famcard},
+      left=10pt, right=8pt, top=6pt, bottom=6pt,
+      before skip=6pt, after skip=10pt,
+      before upper={\setlength{\parskip}{0.45em}\setlength{\parindent}{0pt}\small}]
+{\normalsize\bfseries\textcolor{famcard!60!black}{#2}}\par\nobreak
+\famrow{Idea}{#3}%
+\famrow{Recipe}{#4}%
+\famrow{Assumes}{#5}%
+\famrow{Limits}{#6}%
+\famrow{Typical use}{#7}%
+\end{tcolorbox}\endgroup}
 % One block in the "rewired pipeline" strips (Fig. fig:rewired):
 % #1 first slot, #2 last slot, #3 row y, #4 label, #5 extra style
 \newcommand{\mttblk}[5]{%
@@ -465,32 +481,28 @@ Each family follows the same template so that the reader can scan across
 them: idea, recipe, assumptions, limits, typical use. Vector-based and
 RFS-based members of a family are described together.
 
-\paragraph{\textcolor{famSH}{One hard hypothesis (GNN, SORT-family).}}
-\familycard
+\familycard{famSH}{One hard hypothesis (GNN, SORT-family)}
  {Commit to the single best global assignment each scan.}
  {Hungarian/auction; heuristic existence. SORT-family = same recipe with learned detector and (DeepSORT) learned re-ID cost.}
  {Well-separated targets, low clutter, or strong appearance cues.}
  {Irreversible errors under ambiguity; track swaps at crossings.}
  {Low-cost real-time systems; video tracking-by-detection.}
 
-\paragraph{\textcolor{famSM}{One marginalised hypothesis (JPDA, JIPDA, PMB, LMB).}}
-\familycard
+\familycard{famSM}{One marginalised hypothesis (JPDA, JIPDA, PMB, LMB)}
  {Weight all feasible associations, then collapse to one hypothesis per scan.}
  {Approximate marginals (enumeration, LBP, $k$-best); existence probability (JIPDA, PMB, LMB) or external logic (JPDA).}
  {Moderate clutter; ambiguity resolves within one scan.}
  {Track coalescence for closely spaced targets; information lost by marginalizing.}
  {Cluttered scenes with moderate compute budget.}
 
-\paragraph{\textcolor{famMH}{Many hypotheses (MHT, PMBM, $\delta$-GLMB).}}
-\familycard
+\familycard{famMH}{Many hypotheses (MHT, PMBM, $\delta$-GLMB)}
  {Keep competing global hypotheses and defer decisions until later data resolves them.}
  {Murty or Gibbs; pruning, capping, N-scan; track-oriented (TOMHT, PMBM) or hypothesis-oriented (HOMHT, $\delta$-GLMB) storage.}
  {Enough compute; reduction parameters tuned to the scenario.}
  {Exponential growth held back only by approximations; tuning-sensitive.}
  {Ambiguous, cluttered scenes; crossing targets.}
 
-\paragraph{\textcolor{famIMP}{Implicit association (PHD, CPHD).}}
-\familycard
+\familycard{famIMP}{Implicit association (PHD, CPHD)}
  {Propagate only the first moment (and cardinality for CPHD) of the multi-target density; association is summed out inside the update.}
  {No association solver; Gaussian-mixture or particle implementation; birth intensity.}
  {Poisson-type models; identities not required.}
