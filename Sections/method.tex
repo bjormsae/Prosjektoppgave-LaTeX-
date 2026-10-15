@@ -1,4 +1,4 @@
-\section{Model derivation}
+\section{Method}
 
 \subsection{Process model}
 The process model used in this project is the planar CV-model (constant velocity). To derive the discrete time model we start with a model using continuous white noise acceleration. It can be written as $\mathbf{\dot{x}} = \mathbf{Ax} + \mathbf{Gn}$ where $\mathbf{x}$ is the state vector and $\mathbf{n}$ is the process noise. The vectors and matrices are defined as the following.
@@ -113,3 +113,58 @@ With the noise $v$ is defined as
 v \sim \mathcal{N}(\mathbf{0}, \mathbf{R})
 \]
 Where $\mathbf{R}$ is the measurement noise covariance matrix. In the case of EO, the variance is not reported by the sensor, thus we model all measurements with the same covariance matrix $\mathbf{R}$.
+
+\subsection{Measurement simulator}
+\begin{itemize}
+    \item Using historic AIS-data as ground truth. Downloaded from Kystverket. Used linear interpolation between data points to achieve continuous time sampling. Removed velocity spikes to also include velocity in the "ground truth" (needed for accurate SAR sampling).
+    \item Added SAR, NRD and EO measurements to be Gaussian in the local North-East frame. Sampling is done by adding the zero mean Gaussian to the sampled N-vector.
+    \item Added uniform clutter to the simulator.
+    \item The sensor area is defined by a circle with center N-vector and measurement radius. This is done because the within sensor-checks become trivial dot products with N-vectors.
+\end{itemize}
+
+\subsection{Changes made to the existing PMBM implementation}
+\begin{itemize}
+    \item Initial testing showed that the existing implementation would not scale up to the required size for real maritime surveillance. Clustering and gating needed to be implemented.
+    \item Clustering merge: Whose children use the same Poisson-gated measurement form one group. The prior hypotheses are the product of their lists, truncated to the best N hypotheses,
+    \item Clustering split: tracks whose surviving leaves' histories share no measurement go to separate clusters, each with the marginal of the hypothesis list (Kurien's MHT rule).
+    \item Multiple small bug fixes that either led to a speed-up or fixed crashes from scaling.
+    \item Added N-vector great circle prediction. 
+    \item Birth and survival rate are now per second. This is done for consistency and to allow for different measurement intervals.
+\end{itemize}
+
+\subsection{The big problem}
+\begin{itemize}
+    \item Predicting over large horizons leads to very large uncertainties in position. This makes gating and clustering ineffective because everything is put into the same data association algorithm. How can we combat this? 
+    \item More frequent measurements. Find out what the limit is for the clustering.
+    \item More accurate prediction. This would also handle cases such as ferries which can have high speeds, but switch direction before a new measurement has time to arrive. 
+\end{itemize}
+
+\subsection{The PMBM filter implementation}
+An overview of the filter that has been implemented in this project.
+
+\subsubsection{Single scan overview}
+Pseudocode for a single scan.
+
+\subsubsection{The state}
+PPP and MBM, local and global hypotheses, clusters, tracks
+
+\subsubsection{Prediction}
+N-vector
+
+\subsubsection{Gating}
+According to the n-vector gating presented in the paper.
+
+\subsubsection{Single hypothesis update}
+PPP, existing (detected and misdetected), new Bernoulli.
+
+\subsubsection{Data association}
+Building the reward matrix. Running Murty per cluster.
+
+\subsubsection{Clustering}
+Rules for merging and splitting.
+
+\subsubsection{Reduction}
+Capping, tree pruning, recycling.
+
+\subsubsection{Target estimation}
+How targets are formed from hypotheses and existence probabilities.

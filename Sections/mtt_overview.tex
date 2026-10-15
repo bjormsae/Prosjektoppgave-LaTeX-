@@ -482,21 +482,26 @@ them: idea, recipe, assumptions, limits, typical use. Vector-based and
 RFS-based members of a family are described together.
 
 \familycard{famSH}{One hard hypothesis (GNN, SORT-family)}
- {Commit to the single best global assignment each scan.}
+% IDEA
+ {Commit to the single best global assignment each scan. Analog to MAP estimation in the sense that we only care about the most probable explanation.} 
+% RECIPIE
  {Hungarian/auction; heuristic existence. SORT-family = same recipe with learned detector and (DeepSORT) learned re-ID cost.}
+% ASSUMES
  {Well-separated targets, low clutter, or strong appearance cues.}
+% LIMITS
  {Irreversible errors under ambiguity; track swaps at crossings.}
+% TYPICAL USE
  {Low-cost real-time systems; video tracking-by-detection.}
 
 \familycard{famSM}{One marginalised hypothesis (JPDA, JIPDA, PMB, LMB)}
- {Weight all feasible associations, then collapse to one hypothesis per scan.}
+ {Weight all feasible associations, then collapse to one hypothesis per scan. Analog to MMSE in the sense that we consider all feasible associations and weigh them by how probable they are. The updated state is then a weighed sum of updates, collapsing the state back to the same size as the prior.}
  {Approximate marginals (enumeration, LBP, $k$-best); existence probability (JIPDA, PMB, LMB) or external logic (JPDA).}
  {Moderate clutter; ambiguity resolves within one scan.}
  {Track coalescence for closely spaced targets; information lost by marginalizing.}
  {Cluttered scenes with moderate compute budget.}
 
 \familycard{famMH}{Many hypotheses (MHT, PMBM, $\delta$-GLMB)}
- {Keep competing global hypotheses and defer decisions until later data resolves them.}
+ {Keep competing global hypotheses and defer decisions until later data resolves them. We accept that not all ambiguity can be resolved until more evidence has arrived. Therefore, keep the N best hypotheses and update these as new measurements arrive.}
  {Murty or Gibbs; pruning, capping, N-scan; track-oriented (TOMHT, PMBM) or hypothesis-oriented (HOMHT, $\delta$-GLMB) storage.}
  {Enough compute; reduction parameters tuned to the scenario.}
  {Exponential growth held back only by approximations; tuning-sensitive.}
@@ -606,7 +611,7 @@ No family dominates: the best choice depends on clutter, target dynamics and ava
 Block & Question & If yes, lean towards \\
 \midrule
 Front-end   & Very low SNR, and raw data available? & Track-before-detect \\
-Motion model & Manoeuvring targets? Training data for unusual dynamics? & IMM; learned motion model \\
+Motion model & Maneuvering targets? Training data for unusual dynamics? & IMM; learned motion model \\
 Association cost & Rich appearance cues (e.g.\ EO video)? & Add learned re-ID affinity to the kinematic cost \\
 Association decision & Frequent ambiguity (crossings, close spacing, clutter)? & Deferred (MHT, PMBM); otherwise marginal (JIPDA, PMB) or hard (GNN) \\
 Representation & Many hypotheses with long shared histories? & Track-oriented (TOMHT, PMBM) \\
