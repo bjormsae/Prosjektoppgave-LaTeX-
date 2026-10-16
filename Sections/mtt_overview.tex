@@ -175,29 +175,22 @@ Existence, birth, death & M-of-N, score thresholds, existence probability, Poiss
 \end{table}
 
 \subsubsection{Front-end: detections or raw data}
-Points to make:
-\begin{itemize}
-    \item The tracking algorithm we design is only as good as the detectors we use.
-    \item Many modern image detectors can provide feature information alongside the detections. See re-ID.
-    \item Do the detectors provide multiple detections for the same object? Important to know if we must use extended object tracking or not
-    \item The classic split between track by detect and track before detect.
-\end{itemize}
+The front end is what provides input to the tracking algorithm. Often, the front end is provided and not designed with a specific tracker in mind. The reason why we still include it in this overview is that choice of tracker should be done with your front-end in mind. Front-end also splits tracking into Track-before-detect and Tracking-by-detection. The latter is the classic framework introduced in \autoref{sec:formulation}, while the former uses no detector, but tracks based on the high dimensional raw measurement. A hybrid between this is extended object tracking, where each object may generate more than one detection. This further illustrates the importance of knowing your front-end when designing the tracker. It is also worth noting that a lot of modern detectors, e.g. image detectors, can provide more information than just position. An example is color and shape, which can be used to assist association.
 
 \subsubsection{Sensor model}
-Points to make:
-\begin{itemize}
-    \item Components: state to measurement function, clutter distribution, $P_D$.
-    \item Changing $P_D$ can improve performance when objects are occluded. 
-    \item Knowing where clutter is likely is very powerful for gating and data association.
-\end{itemize}
+Following \autoref{sec:formulation}, we continue to use the Tracking-by-detection paradigm and move from front-end to the sensor model. This is natural, as we want our sensor model to reflect our front-end ``well enough'' for our tracker to make informed decisions. The idea is that if the tracker knows how measurements are likely generated, it will be better equipped to make good decisions regarding them. To achieve this, we need to model three things.
+\medskip
+
+Firstly, given a present target, how is a measurement generated? That is, we need a function that maps the state of an object to a measurement. This function, $\mathbf{z} = h(\mathbf{x})$, can be linear or non-linear. Secondly, we need the probability of a target generating a measurement; $P_D(\mathbf{x})$. This probability can vary based on the target's location and/or other parameters such as weather conditions. Finally, we need to model how clutter; $\mathbf{c}$ is generated. Clutter can be spatially and temporally varying in the same way as $P_D$.
+\medskip
+
+To illustrate the power of these techniques, we can imagine a front facing radar. $P_D$ can be adjusted to zero in the area behind other detected objects. This small modelling change allows target estimates to persist even though they are occluded for a long time. All because we told the tracker to not expect the occluded targets to generate measurements. 
 
 \subsubsection{Motion model and filter}
-Points to make:
-\begin{itemize}
-    \item Classically built upon the Kalman filter for processing sequential measurements. The usual motion models (CV, CT, IMM)
-    \item Can extend the filter by using EKF, UKF or particle filtering.
-    \item Can extend further to state prediction by deep learning.
-\end{itemize}
+Contrary to the sensor model, the motion model and filter is usually the same as in standard filtering. This is because the standard Kalman filter equations appear in the Bayesian update step when white Gaussian noise and linear model assumptions are applied. This naturally motivates the usual extensions of the Kalman filter; the extended Kalman filter (EKF), unscented Kalman filter (UKF) or particle filtering.
+\medskip
+
+The motion model itself can often be more flexible than the Kalman update itself. One example is that multiple motion models can be considered simultaneously by using Interacting Multiple Models (IMM). It is also possible to use deep learning to predict motion. This can be combined with classic update steps as long as the prediction includes both a predicted state and uncertainty.
 
 \subsubsection{Gating}
 Points to make:
