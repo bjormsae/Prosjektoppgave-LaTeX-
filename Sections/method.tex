@@ -161,10 +161,32 @@ PPP, existing (detected and misdetected), new Bernoulli.
 Building the reward matrix. Running Murty per cluster.
 
 \subsubsection{Clustering}
-Rules for merging and splitting.
+Each cluster runs its own PMBM filter independently, with probabilities normalized within each cluster. There are two immediate benefits from using clustering for tracking. We don't need as many hypotheses per cluster and the association becomes far cheaper. 
+\medskip
+
+\paragraph{Merging}
+Clusters are merged whenever they gate the same measurement. A cluster gating a measurement means that at least one leaf node in a track tree gates the measurement. Conditioned on the previous cycle's gates, clusters are independent. This means that merging them is simply a Cartesian product over each cluster's hypotheses. Each cluster contains a list of global hypotheses and their respective weights. Each global hypothesis points to at most one leaf node in each track tree. When clusters are merged, you simply multiply the weights (add the log weights) and make this a new global hypothesis with the combined leaf nodes from the track trees. Assuming each cluster has $H_{max}$ global hypotheses, the combined group has $H_{max}^k$ hypotheses, where $k$ is the number of clusters being merged. These are then pruned down to at most $H_{max}$ before running the association. Merging of multiple clusters is done one by one, and pruning is done after each cluster is merged. Thus, at most $H_{max}^2$ global hypotheses exist at one given moment.
+\medskip
+
+\paragraph{Splitting}
+Splitting of clusters is not done explicitly. Rather, after data association is done, new clusters are formed based on measurement history. Each measurement is hashed by its timestamp and location, meaning each measurement is uniquely stored. 
+
+\begin{itemize}
+    \item Clusters only need to be rebuilt per group. Since groups don't share history with each other, they cannot form clusters across one another.
+    \item Before splitting, four things happen. These are approximations, which makes the algorithm feasible, but they are small approximations if you think about it. After the association step we again keep at most the $H_{max}$ best hypotheses. We then remove leaves that no hypotheses uses, going upwards and removing parents with no children. We also remove every leaf with $r < 1^-6$ since it is very unlikely to exist. Finally, we cap the tree depth at $D_{max}$, removing the roots children and attaching the grandchildren instead.
+    \item Clusters are reformed based on measurement history. If tracks contest the same measurement in the tree, they form a cluster. This procedure is a union over the group, meaning track $A$ and $B$ can be in the same cluster even though they don't share measurement history. This happens if both $A$ and $B$ share a measurement with another track $C$. 
+    \item The maximum tree depth is what allows the splitting to work efficiently. 
+\end{itemize}
 
 \subsubsection{Reduction}
 Capping, tree pruning, recycling.
+
+\begin{itemize}
+    \item Recycling is a non-trivial problem in general, but simple special case recycling can be implemented quite easily. 
+    \item Criteria for being recycled; take a cluster with exactly one track and one hypothesis. The hypothesis's Bernoulli must also have existence probability $r < 0.2$. This component is then removed from the MBM and the posterior becomes a PPP component with $w = r$ and mean and covariance unchanged.
+    \item The recycling does not lose any probability mass, it just moves it. We can therefore get away with such a high recycling probability threshold.
+    \item The reason for recycling these components is mainly to allow for higher clutter scenarios without blowing up runtime. In a high clutter scenario without recycling, new Bernoulli components will quickly connect clusters and make the association step a bottleneck.
+\end{itemize}
 
 \subsubsection{Target estimation}
 How targets are formed from hypotheses and existence probabilities.

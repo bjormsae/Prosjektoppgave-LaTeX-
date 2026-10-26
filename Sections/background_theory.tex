@@ -1,5 +1,41 @@
 \section{Some theory}
 
+\subsection{Log-likelihoods}
+One common scheme that a lot of MTT algorithms employ is log-likelihoods. This means that a lot of probabilities in the tracker is stored and computed as the logarithm of the probabilities ($\ln(p)$). There are a lot of upsides to this, as we will soon discover, but just as importantly, there are no real downsides either. As someone familiar with optimization and statistics might already know, the logarithm is a monotonically increasing function. The formal definition; $\text{if } x < y, \text{ then } f(x) < f(y)$, implies that we can still order probabilities from least to most probable by log-likelihoods. It is also trivial to recover the actual probability by the exponential function.
+\medskip
+
+One reason why log-likelihoods are useful is numerical stability. In a multi target setting, it is not unusual to deal with hypotheses or existence probabilities with vanishingly small probabilities. Storing these as log-likelihoods allows for the use of lower precision datatypes, at least until the actual probabilities need computing. 
+\medskip
+
+Another useful property of logarithms is that multiplications become additions and divisions become subtractions. Most filters are based on Markov and conditional independence assumptions. These give clean multiplications, which are just additions under the logarithm. Logarithms are also very useful when normalizing weight vectors, where numerical stability can be a real issue. The following normalization formula is numerically stable and exact, even for very small probabilities. See Gregory Gundersens blog \cite{logsumexp} for the full details and explanation.
+
+\begin{align*}
+    w_{\text{normalized}} &= w - w_{\text{norm}} \\
+    w_{\text{norm}} &= w_{max} + \ln \left( \sum_{h} e^{w_h - w_{max}} \right)
+\end{align*}
+
+\medskip
+
+The last simplification I want to highlight is that Gaussian log-likelihoods are just quadratic forms. A common approximation is to use Gaussian linear assumptions. This leads to the tracker needing to compute a lot of Gaussian likelihoods. Computing the log-likelihoods, simplifies the computation, as seen in \autoref{eq:quadratic_form}. The example computes the log-measurement-likelihood, using $\nu = z - \hat{z}$ as the innovation.
+
+\begin{equation}
+    \ln \mathcal{N}(\mathbf{z}; \hat{\mathbf{z}}, \mathbf{S}) = -\frac{1}{2} \boldsymbol{\nu}^\top \mathbf{S}^{-1} \boldsymbol{\nu} - \frac{1}{2} \ln \lvert 2\pi \mathbf{S} \rvert
+    \label{eq:quadratic_form}
+\end{equation}
+
+\subsection{The PMBM filter}
+
+\subsubsection{PMBM density}
+
+\subsubsection{PMBM prediction}
+
+\subsubsection{PMBM update}
+
+\subsubsection{Posterior approximations}
+Pruning, Capping, Recycling. 
+
+
+
 \subsection{Bayesian filtering}
 \label{bayesian_filtering}
 
