@@ -6,3 +6,11 @@ Meeting notes:
     \item Describe in detail how the specific deviations are handled and why.
     \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
 \end{itemize}
+
+\subsection{Actual results}
+First list what has actually been done in this project.
+\begin{itemize}
+    \item Implemented N-vector exact spherical CV prediction on an existing PMBM filter implementation. Maybe compare predictions, and argue why better prediction tools are needed for this to be effective. But then, why bother in the first place? Interesting argument. Look into this further.
+    \item Implemented clustering and splitting for efficient scaling. Need some concrete results here for how the implementation is better. Also discuss how effective the splitting is and what causes it to fail. 
+    \item Added simple recycling as well. Tie this into the splitting and show concrete results based on maximum cluster size and why this matters a lot. 
+\end{itemize}
