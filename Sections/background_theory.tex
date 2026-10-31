@@ -24,17 +24,98 @@ The last simplification I want to highlight is that Gaussian log-likelihoods are
 \end{equation}
 
 \subsection{The PMBM filter}
+Introduced by \textcite{williams_pmbm_2015}, the PMBM filter is the exact conjugate prior for the standard model assumptions in recursive multi target tracking. \textcite{garcia_2018_pmbm} and \textcite{garcia_2017_pmbm} finds that, with standard reduction techniques, the PMBM filter can be implemented and yields better performance than comparable RFS-filters on challenging tracking scenarios. 
+\medskip
+
+The following section will be an overview of the PMBM filter. We will start by defining the density that is carried, and how it is composed. We will then go over how the different components is predicted and updated given some data association. Lastly, we will go over the common reduction techniques used to keep the implementation feasible. This overview will skip the derivations, but present the resulting equations. The equations will first be stated generally, then for linear Gaussian assumptions. For further details, the reader is referred to \cite{garcia_2018_pmbm} or \cite{chalmers_mot_course}.
+\medskip
+
+\autoref{fig:pmbm_flow} shows how the densities are propagated through one recursion of the PMBM filter. We will refer back to this figure throughout as the concepts are explained further.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{Images/pmbm_flow.pdf}
+    \caption{One recursion of the PMBM filter: prediction, update and reduction. Figure taken from \cite{chalmers_mot_course}.}
+    \label{fig:pmbm_flow}
+\end{figure}
 
 \subsubsection{PMBM density}
+The PMBM density is a union of two independent random finite sets: one Poisson point process (PPP) and one Multi Bernoulli Mixture (MBM). The PPP is used for modelling new targets, the dynamics of targets not yet observed and targets forgotten by the MBM. We will come back to the last point when discussing the reduction step. The multi-Bernoulli (\textbf{MB}M) models targets we have observed at least once, their probability of existence and their state, given they exist. The mixture (MB\textbf{M}) handles uncertainty in measurement origin by considering multiple global hypotheses. \autoref{eq:pmbm} shows the factorization into the independent PPP and MBM densities. The sum goes over the disjoint union of undetected ($\mathbf{x}^u_k$) and detected ($\mathbf{x}^d_k$) target sets. That is, we sum over each possible combination of assignments of targets ($\mathbf{x}_k$), into undetected or detected targets.
+
+\begin{equation}
+  \mathcal{PMBM}_{k|k}(\mathbf{x}_k) = \sum_{\mathbf{x}^u_k \uplus \mathbf{x}^d_k = \mathbf{x}_k} \mathcal{P}_{k|k}(\mathbf{x}^u_k)\, \mathcal{MBM}_{k|k}(\mathbf{x}^d_k),
+  \label{eq:pmbm}
+\end{equation}
+
+\textbf{Birth and undetected Poisson point process} \\
+\autoref{eq:ppp} shows the pdf of the PPP. $\lambda^u_{k|k}(x)$ is the Poisson intensity, which tells us where we expect new or undetected targets. It is normal to parameterize the Poisson intensity by Gaussian mixtures. One for the undetected targets, as shown in \autoref{eq:ppp_gm}, and one for the birth process, similar, but not repeated.
+
+\begin{equation}
+  \mathcal{P}_{k|k}(\mathbf{x}^u_k) = e^{-\int \lambda^u_{k|k}(x)\,\mathrm{d}x} \prod_{x \in \mathbf{x}^u_k} \lambda^u_{k|k}(x),
+  \label{eq:ppp}
+\end{equation}
+
+\begin{equation}
+  \lambda^u_{k|k}(x) = \sum_{h=1}^{H_{k|k}} w^{u,h}_{k|k}\, \mathcal{N}\big(x;\, m^{u,h}_{k|k},\, P^{u,h}_{k|k}\big),
+  \label{eq:ppp_gm}
+\end{equation}
+
+The expected number of targets can be found by integrating the intensity over the state space. In the Gaussian case this integral is simply the sum of weights.
+
+\begin{equation*}
+    \int \lambda^u_{k|k}(x)\,\mathrm{d}x = \sum_{h} w^{u,h}_{k|k}
+\end{equation*}
+
+This means that the Gaussian mixture does not have to be a pdf, where the weights sum to one. Another common parameterization of the birth process, is to make it uniform inside the FOV. The Gaussian-mixture recursion is then no longer exact, since the product of a uniform intensity and a Gaussian likelihood is a truncated Gaussian. However, when the surveillance region is large compared to the measurement noise the truncation is negligible and the result is well approximated by a Gaussian.
+
+\textbf{The Multi Bernoulli Mixture} \\
+The MBM holds the different hypotheses of states for the detected targets. A target being detected does not mean that it is guaranteed to actually exist, which is handled by the existence probabilities. The MBM pdf is shown in \autoref{eq:mbm}, where $\mathcal{A}_{k|k}$ is the set of global hypotheses and $w^{a}_{k|k}$ is the weight of said hypotheses. Each global hypothesis is proportional to a sum of local hypotheses and the weight of global hypotheses must sum to one (\autoref{eq:weights}). 
+
+\begin{equation}
+  \mathcal{MBM}_{k|k}(\mathbf{x}^d_k) = \sum_{a \in \mathcal{A}_{k|k}} w^{a}_{k|k} \sum_{\mathbf{x}^1 \uplus \cdots \uplus \mathbf{x}^{n} = \mathbf{x}^d_k} \prod_{i=1}^{n} \mathcal{B}^{i,a^i}_{k|k}(\mathbf{x}^i), 
+  \label{eq:mbm}
+\end{equation}
+
+where each Bernoulli density is
+\begin{equation}
+  \mathcal{B}^{i,a^i}_{k|k}(\mathbf{x}) =
+  \begin{cases}
+    1 - r^{i,a^i}_{k|k}, & \mathbf{x} = \emptyset, \\
+    r^{i,a^i}_{k|k}\, p^{i,a^i}_{k|k}(x), & \mathbf{x} = \{x\}, \\
+    0, & \text{otherwise},
+  \end{cases}
+  \label{eq:bernoulli}
+\end{equation}
+and the global hypothesis weights satisfy
+\begin{equation}
+  w^{a}_{k|k} \propto \prod_{i=1}^{n} w^{i,a^i}_{k|k},
+  \qquad
+  \sum_{a \in \mathcal{A}_{k|k}} w^{a}_{k|k} = 1.
+  \label{eq:weights}
+\end{equation}
+
 
 \subsubsection{PMBM prediction}
+\textbf{PPP prediction} \\
+
+\textbf{MBM prediction} \\
 
 \subsubsection{PMBM update}
+\textbf{PPP update: No measurements attributed} \\
 
-\subsubsection{Posterior approximations}
-Pruning, Capping, Recycling. 
+\textbf{PPP update: Measurement attributed} \\
 
+\textbf{MBM update: Missed detection} \\
 
+\textbf{MBM update: Detected} \\
+
+\subsubsection{PMBM reduction}
+
+\textbf{Capping} \\
+
+\textbf{Pruning} \\
+
+\textbf{Recycling} \\
 
 \subsection{Bayesian filtering}
 \label{bayesian_filtering}
