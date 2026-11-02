@@ -46,6 +46,7 @@ The PMBM density is a union of two independent random finite sets: one Poisson p
   \mathcal{PMBM}_{k|k}(\mathbf{x}_k) = \sum_{\mathbf{x}^u_k \uplus \mathbf{x}^d_k = \mathbf{x}_k} \mathcal{P}_{k|k}(\mathbf{x}^u_k)\, \mathcal{MBM}_{k|k}(\mathbf{x}^d_k),
   \label{eq:pmbm}
 \end{equation}
+\medskip
 
 \textbf{Birth and undetected Poisson point process} \\
 \autoref{eq:ppp} shows the pdf of the PPP. $\lambda^u_{k|k}(x)$ is the Poisson intensity, which tells us where we expect new or undetected targets. It is normal to parameterize the Poisson intensity by Gaussian mixtures. One for the undetected targets, as shown in \autoref{eq:ppp_gm}, and one for the birth process, similar, but not repeated.
@@ -56,7 +57,7 @@ The PMBM density is a union of two independent random finite sets: one Poisson p
 \end{equation}
 
 \begin{equation}
-  \lambda^u_{k|k}(x) = \sum_{h=1}^{H_{k|k}} w^{u,h}_{k|k}\, \mathcal{N}\big(x;\, m^{u,h}_{k|k},\, P^{u,h}_{k|k}\big),
+  \lambda^u_{k|k}(x) = \sum_{h=1}^{H_{k|k}} w^{u,h}_{k|k}\, \mathcal{N}\big(x;\, \mu^{u,h}_{k|k},\, P^{u,h}_{k|k}\big),
   \label{eq:ppp_gm}
 \end{equation}
 
@@ -67,16 +68,25 @@ The expected number of targets can be found by integrating the intensity over th
 \end{equation*}
 
 This means that the Gaussian mixture does not have to be a pdf, where the weights sum to one. Another common parameterization of the birth process, is to make it uniform inside the FOV. The Gaussian-mixture recursion is then no longer exact, since the product of a uniform intensity and a Gaussian likelihood is a truncated Gaussian. However, when the surveillance region is large compared to the measurement noise the truncation is negligible and the result is well approximated by a Gaussian.
+\medskip
 
 \textbf{The Multi Bernoulli Mixture} \\
-The MBM holds the different hypotheses of states for the detected targets. A target being detected does not mean that it is guaranteed to actually exist, which is handled by the existence probabilities. The MBM pdf is shown in \autoref{eq:mbm}, where $\mathcal{A}_{k|k}$ is the set of global hypotheses and $w^{a}_{k|k}$ is the weight of said hypotheses. Each global hypothesis is proportional to a sum of local hypotheses and the weight of global hypotheses must sum to one (\autoref{eq:weights}). 
+The MBM holds different hypotheses of states for the detected targets. Multiple hypotheses are needed because of ambiguity of measurement to target association. Also, a target being detected does not mean that it is guaranteed to actually exist, which is handled by the existence probabilities. The MBM pdf is shown in \autoref{eq:mbm}, where $\mathcal{A}_{k|k}$ is the set of global hypotheses and $w^{a}_{k|k}$ is the weight of said hypotheses. Each global hypothesis weight is proportional to a product of local hypotheses weights and the weight of global hypotheses must sum to one (\autoref{eq:weights}). Just as in \autoref{eq:pmbm}, each global hypothesis is a union of independent Bernoulli random finite sets. This yields the same ``sum of combinations'' formula, but with $n$ sets instead of two.
 
 \begin{equation}
   \mathcal{MBM}_{k|k}(\mathbf{x}^d_k) = \sum_{a \in \mathcal{A}_{k|k}} w^{a}_{k|k} \sum_{\mathbf{x}^1 \uplus \cdots \uplus \mathbf{x}^{n} = \mathbf{x}^d_k} \prod_{i=1}^{n} \mathcal{B}^{i,a^i}_{k|k}(\mathbf{x}^i), 
   \label{eq:mbm}
 \end{equation}
 
-where each Bernoulli density is
+\begin{equation}
+  w^{a}_{k|k} \propto \prod_{i=1}^{n} w^{i,a^i}_{k|k},
+  \qquad
+  \sum_{a \in \mathcal{A}_{k|k}} w^{a}_{k|k} = 1.
+  \label{eq:weights}
+\end{equation}
+
+The Bernoulli densities are shown in \autoref{eq:bernoulli}. Within each local hypothesis $a^i$, the target either exists or does not exist. This is handled by that specific targets existence probability within the local hypothesis ($r^{i,a^i}_{k|k}$). Given a target exists, it is distributed according to $p^{i,a^i}_{k|k}(x)$, within the specific local hypothesis.
+
 \begin{equation}
   \mathcal{B}^{i,a^i}_{k|k}(\mathbf{x}) =
   \begin{cases}
@@ -86,19 +96,55 @@ where each Bernoulli density is
   \end{cases}
   \label{eq:bernoulli}
 \end{equation}
-and the global hypothesis weights satisfy
-\begin{equation}
-  w^{a}_{k|k} \propto \prod_{i=1}^{n} w^{i,a^i}_{k|k},
-  \qquad
-  \sum_{a \in \mathcal{A}_{k|k}} w^{a}_{k|k} = 1.
-  \label{eq:weights}
-\end{equation}
+
+It is common for the state density $p^{i,a^i}_{k|k}(x)$ to be assumed Gaussian.
 
 
 \subsubsection{PMBM prediction}
+The PMBM prediction follow from the model assumptions outlined in the problem formulation (\autoref{sec:formulation}). The most important result is that components can be predicted independently. This is because the model assumes that targets survive, move and appear independently of each other. The two parts of the model for prediction are the probability of survival and motion model. In the general case $p_S(x_{k-1})$ can be state dependent and $f(x_k \mid x_{k-1})$ non-linear.
+\medskip
+
 \textbf{PPP prediction} \\
+As seen in \autoref{eq:pred_ppp}, PPP prediction consists of predicting the undetected targets and adding the birth density. Since targets are not guaranteed to survive until new measurements arrive, $p_S$ enter the Chapman-Kolmogorov integral.
+
+\begin{equation}
+  \lambda^u_{k|k-1}(x_k) = \lambda^b_k(x_k)
+    + \int f(x_k \mid x_{k-1})\, p_S(x_{k-1})\, \lambda^u_{k-1|k-1}(x_{k-1})\,\mathrm{d}x_{k-1}.
+  \label{eq:pred_ppp}
+\end{equation}
+
+Applying the linear Gaussian motion model and assuming constant $P_S$ gives the predicted density shown in \autoref{eq:lg_ppp_pred}. Each of the ${H_{k-1|k-1}}$ undetected components is predicted by the standard Kalman filter prediction and their weights are multiplied by the probability of survival. 
+
+\begin{equation}
+\begin{split}
+  \lambda^u_{k|k-1}(x) = \lambda^b_k(x)
+    &+ \sum_{h=1}^{H_{k-1|k-1}} p_S\, w^{u,h}_{k-1|k-1} \\
+    &\times \mathcal{N}\big(x;\, F \mu^{u,h}_{k-1|k-1},\,
+      F P^{u,h}_{k-1|k-1} F^{\mathsf{T}} + Q\big),
+\end{split}
+\label{eq:lg_ppp_pred}
+\end{equation}
 
 \textbf{MBM prediction} \\
+MBM prediction follow the same model assumptions as the PPP. This means each Bernoulli can be predicted independently, shown in \autoref{eq:pred_w} through \ref{eq:pred_p}. Notice the normalization constant in \autoref{eq:pred_p} being the same integral as in \autoref{eq:pred_r}. The weights are unchanged through the prediction. This makes sense since only new measurements can give information about which previous associations are more likely. 
+
+\begin{align}
+  w^{i,a^i}_{k|k-1} &= w^{i,a^i}_{k-1|k-1}, \label{eq:pred_w} \\
+  r^{i,a^i}_{k|k-1} &= r^{i,a^i}_{k-1|k-1}
+    \int p_S(x_{k-1})\, p^{i,a^i}_{k-1|k-1}(x_{k-1})\,\mathrm{d}x_{k-1}, \label{eq:pred_r} \\
+  p^{i,a^i}_{k|k-1}(x_k) &=
+    \frac{\int f(x_k \mid x_{k-1})\, p_S(x_{k-1})\, p^{i,a^i}_{k-1|k-1}(x_{k-1})\,\mathrm{d}x_{k-1}}
+         {\int p_S(x_{k-1})\, p^{i,a^i}_{k-1|k-1}(x_{k-1})\,\mathrm{d}x_{k-1}}. \label{eq:pred_p}
+\end{align}
+
+When applying linear Gaussian and constant $P_S$ assumptions, the integral simplify to standard Kalman filter predictions for each Bernoulli component. The existence probability gets multiplied by the probability of survival and the weights remain unchanged.
+
+\begin{align*}
+  w^{i,a^i}_{k|k-1} &= w^{i,a^i}_{k-1|k-1}, \\
+  r^{i,a^i}_{k|k-1} &= p_S\, r^{i,a^i}_{k-1|k-1}, \\
+  p^{i,a^i}_{k|k-1}(x) &= \mathcal{N}\big(x;\, F \mu^{i,a^i}_{k-1|k-1},\,
+    F P^{i,a^i}_{k-1|k-1} F^{\mathsf{T}} + Q\big).
+\end{align*}
 
 \subsubsection{PMBM update}
 \textbf{PPP update: No measurements attributed} \\

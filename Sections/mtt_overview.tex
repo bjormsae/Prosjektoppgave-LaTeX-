@@ -73,7 +73,7 @@ Multi-target tracking (MTT) is the problem of estimating the number of targets a
 The following problem statement is based on the commonly used Detection Based Tracking (DBT) paradigm. This formulation assumes that a detector supplies detections of objects in a sensors field of view (FOV)\footnote{The addition of clutter (false alarms) and probability of detection ($\PD$) less than one arises naturally from classical detection theory, where detecting noisy objects leads to an inevitable tradeoff between lots of clutter and a high $\PD$ \cite{detection_theory}.}.
 \medskip
 
-Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of target states at time $k$, with $N_k$ unknown and time-varying. Each target survives with probability $\PS$ and evolves as $\mathbf{x}_{k+1}=f(\mathbf{x}_k)+\mathbf{w}_k$. Each target is detected with probability $\PD$, producing $\mathbf{z}_k=h(\mathbf{x}_k)+\mathbf{v}_k$. New targets appear according to a birth model. 
+Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of target states at time $k$, with $N_k$ unknown and time-varying. Each target survives with probability $\PS$ and evolves as $\mathbf{x}_{k+1} \sim f(\mathbf{x}_{k+1} \vert \mathbf{x}_k)$. Each target is detected with probability $\PD$, producing $\mathbf{z}_k \sim h(\mathbf{z}_k \vert \mathbf{x}_k)$. New targets appear according to a birth model. 
 \medskip
 
 $Z_k = \{\mathbf{z}_k^{1},\dots,\mathbf{z}_k^{M_k} \bigcup \mathbf{C}_k\}$ is the set of measurements received.
