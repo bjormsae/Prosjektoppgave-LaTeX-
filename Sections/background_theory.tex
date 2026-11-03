@@ -147,13 +147,119 @@ When applying linear Gaussian and constant $P_S$ assumptions, the integral simpl
 \end{align*}
 
 \subsubsection{PMBM update}
-\textbf{PPP update: No measurements attributed} \\
+Having used birth, survival and a motion model to predict in the absence of measurement, we will now move on to inference from measurements. \autoref{fig:pmbm_flow} introduces the vocabulary for the section: detections and missed detections. This is also the way hypotheses evolve, as each measurement can come from an existing target, a new target or clutter. 
+\medskip
 
-\textbf{PPP update: Measurement attributed} \\
+To limit the number of new hypotheses generated, gating must be performed to discard very unlikely measurement $\leftrightarrow$ target combinations. This is a prerequisite to the update, so only gated measurements will be used in each specific update.
+\medskip
+
+\textbf{PPP update: Missed detection} \\
+The probability of detection ($p_D$), splits the PPP into undetected and detected hypotheses. To reflect the missed detection hypotheses, each component of the intensity is scaled by the probability of missed detection (\autoref{eq:upd_ppp_md}). This is done for each component, regardless of whether it gated any measurements. The logic behind this is that the hypotheses covering detected targets are handled by the new Bernoullis described next.
+
+\begin{equation}
+  \lambda^u_{k|k}(x) = \big(1 - p_D(x)\big)\, \lambda^u_{k|k-1}(x).
+  \label{eq:upd_ppp_md}
+\end{equation}
+
+Assuming constant $p_D$, only the weights of the Gaussian mixture change. The means and covariances remain unchanged. 
+
+\begin{equation*}
+  w^{u,h}_{k|k} = (1 - p_D)\, w^{u,h}_{k|k-1}, \qquad
+  \mu^{u,h}_{k|k} = \mu^{u,h}_{k|k-1}, \qquad
+  P^{u,h}_{k|k} = P^{u,h}_{k|k-1}.
+\end{equation*}
+\medskip
+
+\textbf{PPP update: Detected (new target)} \\
+Every measurement $z^j_k$ may be from a new target and thanks to the undetected PPP, we already have a prior for this target. For each measurement we create a Bernoulli with two local hypotheses. In $a^i = 1$, $z^j_k$ is associated to a previously detected target, and the new target therefore does not exist. Since a global hypothesis consists of picking a local hypothesis for each Bernoulli, this option must also be included (\autoref{eq:upd_ppp_d_none}). The second hypothesis, $a^i = 2$, covers the scenario where $z^j_k$ originates from either clutter or a new target. The uncertainty of origin is captured in the existence probability, as can be seen in \autoref{eq:upd_ppp_d_r}.
+
+\begin{align}
+  w^{i,1}_{k|k} &= 1, \qquad r^{i,1}_{k|k} = 0, \label{eq:upd_ppp_d_none}\\
+  w^{i,2}_{k|k} &= e^j_k + \lambda^c(z^j_k), \label{eq:upd_ppp_d_w}\\
+  r^{i,2}_{k|k} &= \frac{e^j_k}{e^j_k + \lambda^c(z^j_k)}, \label{eq:upd_ppp_d_r}\\
+  p^{i,2}_{k|k}(x) &= \frac{p_D(x)\, h(z^j_k \mid x)\, \lambda^u_{k|k-1}(x)}{e^j_k}, \label{eq:upd_ppp_d_p}
+\end{align}
+where $e^j_k$ is the likelihood of $z^j_k$ given that it is the first detection of a previously undetected target.
+\begin{equation}
+  e^j_k = \int p_D(x)\, h(z^j_k \mid x)\, \lambda^u_{k|k-1}(x)\,\mathrm{d}x .
+  \label{eq:upd_ppp_d_e}
+\end{equation}
+
+Using constant $p_D$, linear Gaussian assumptions, and the measurement model $h(z \mid x) = \mathcal{N}(z;\, Hx,\, R)$, each PPP mixture component that gates measurement $z^j_k$ is updated with the standard Kalman filter update. 
+
+\begin{align*}
+  \hat z^{u,h}_{k|k-1} &= H \mu^{u,h}_{k|k-1}, \\
+  S^{u,h}_k &= H P^{u,h}_{k|k-1} H^{\mathsf{T}} + R, \\
+  K^{u,h}_k &= P^{u,h}_{k|k-1} H^{\mathsf{T}} \big(S^{u,h}_k\big)^{-1}, \\
+  \tilde\mu^{h,j}_k &= \mu^{u,h}_{k|k-1} + K^{u,h}_k \big(z^j_k - \hat z^{u,h}_{k|k-1}\big), \\
+  \tilde P^{h}_k &= \big(I - K^{u,h}_k H\big) P^{u,h}_{k|k-1}.
+\end{align*}
+
+The likelihood in \autoref{eq:upd_ppp_d_e} now becomes a weighted sum over the gated components. The weight and existence probability are the same as in \autoref{eq:upd_ppp_d_w} and \autoref{eq:upd_ppp_d_r}, but using this measurement likelihood instead.
+
+\begin{equation*}
+  e^j_k = p_D \sum_{h \in \mathcal{H}^j} w^{u,h}_{k|k-1}\,
+    \mathcal{N}\big(z^j_k;\, \hat z^{u,h}_{k|k-1},\, S^{u,h}_k\big).
+\end{equation*}
+
+The posterior density in \autoref{eq:upd_ppp_d_p} is now a Gaussian mixture with weights $\beta^{h,j}_k$. Each mixture component comes from a PPP component which gated the measurement. For complexity reasons, we would like to have a single Gaussian represent the new target. Moment matching is therefore performed to reduce the mixture to a single Gaussian.
+
+\begin{align*}
+  \beta^{h,j}_k &= \frac{p_D\, w^{u,h}_{k|k-1}\,
+    \mathcal{N}\big(z^j_k;\, \hat z^{u,h}_{k|k-1},\, S^{u,h}_k\big)}{e^j_k}, \\
+  \mu^{i,2}_{k|k} &= \sum_{h \in \mathcal{H}^j} \beta^{h,j}_k\, \tilde\mu^{h,j}_k, \\
+  P^{i,2}_{k|k} &= \sum_{h \in \mathcal{H}^j} \beta^{h,j}_k
+    \Big[\tilde P^{h}_k + \big(\tilde\mu^{h,j}_k - \mu^{i,2}_{k|k}\big)
+    \big(\tilde\mu^{h,j}_k - \mu^{i,2}_{k|k}\big)^{\mathsf{T}}\Big].
+\end{align*}
+\medskip
 
 \textbf{MBM update: Missed detection} \\
+All local hypotheses $a^i$ need to create a missed detection hypothesis, denoted $(a^i, 0)$. The reason is that all measurements can be generated by either new or other existing targets no matter how many measurements a hypothesis gates. \autoref{eq:upd_mbm_md_w} to \ref{eq:upd_mbm_md_p} show the updated parameters. Notice that in the absence of measurements, only information can be gained from $p_D(x)$. 
+
+\begin{align}
+  w^{i,(a^i,0)}_{k|k} &= w^{i,a^i}_{k|k-1}
+    \Big(1 - r^{i,a^i}_{k|k-1} + r^{i,a^i}_{k|k-1}
+    \int \big(1 - p_D(x)\big)\, p^{i,a^i}_{k|k-1}(x)\,\mathrm{d}x\Big), \label{eq:upd_mbm_md_w}\\
+  r^{i,(a^i,0)}_{k|k} &= \frac{r^{i,a^i}_{k|k-1} \int \big(1 - p_D(x)\big)\, p^{i,a^i}_{k|k-1}(x)\,\mathrm{d}x}
+    {1 - r^{i,a^i}_{k|k-1} + r^{i,a^i}_{k|k-1} \int \big(1 - p_D(x)\big)\, p^{i,a^i}_{k|k-1}(x)\,\mathrm{d}x}, \label{eq:upd_mbm_md_r}\\
+  p^{i,(a^i,0)}_{k|k}(x) &= \frac{\big(1 - p_D(x)\big)\, p^{i,a^i}_{k|k-1}(x)}
+    {\int \big(1 - p_D(x')\big)\, p^{i,a^i}_{k|k-1}(x')\,\mathrm{d}x'}. \label{eq:upd_mbm_md_p}
+\end{align}
+
+With constant $p_D$ no information can update the state density and the state density is unchanged. However, the absence of measurement results in a reduction in both weight and existence probability.
+
+\begin{align*}
+  w^{i,(a^i,0)}_{k|k} &= w^{i,a^i}_{k|k-1} \big(1 - r^{i,a^i}_{k|k-1}\, p_D\big), \\
+  r^{i,(a^i,0)}_{k|k} &= \frac{r^{i,a^i}_{k|k-1}\,(1 - p_D)}{1 - r^{i,a^i}_{k|k-1}\, p_D}, \\
+  \mu^{i,(a^i,0)}_{k|k} &= \mu^{i,a^i}_{k|k-1}, \qquad
+  P^{i,(a^i,0)}_{k|k} = P^{i,a^i}_{k|k-1}.
+\end{align*}
+\medskip
 
 \textbf{MBM update: Detected} \\
+For each measurement $z^j_k$ inside the gate of local hypothesis $a^i$, a detection hypothesis $(a^i, j)$ is created. This is because you cannot know which measurement belong to the target. Given that the target generated a measurement, it exists with certainty. It therefore gets an existence probability of one within this local hypothesis.
+
+\begin{align}
+  w^{i,(a^i,j)}_{k|k} &= w^{i,a^i}_{k|k-1}\, r^{i,a^i}_{k|k-1}
+    \int p_D(x)\, g(z^j_k \mid x)\, p^{i,a^i}_{k|k-1}(x)\,\mathrm{d}x, \label{eq:upd_mbm_d_w}\\
+  r^{i,(a^i,j)}_{k|k} &= 1, \label{eq:upd_mbm_d_r}\\
+  p^{i,(a^i,j)}_{k|k}(x) &= \frac{p_D(x)\, g(z^j_k \mid x)\, p^{i,a^i}_{k|k-1}(x)}
+    {\int p_D(x')\, g(z^j_k \mid x')\, p^{i,a^i}_{k|k-1}(x')\,\mathrm{d}x'}. \label{eq:upd_mbm_d_p}
+\end{align}
+
+Under linear Gaussian assumptions and constant $p_D$, this is a standard Kalman filter update, where the weight is scaled by the predicted measurement likelihood.
+
+\begin{align*}
+  \hat z^{i,a^i}_{k|k-1} &= H \mu^{i,a^i}_{k|k-1}, \\
+  S^{i,a^i}_k &= H P^{i,a^i}_{k|k-1} H^{\mathsf{T}} + R, \\
+  K^{i,a^i}_k &= P^{i,a^i}_{k|k-1} H^{\mathsf{T}} \big(S^{i,a^i}_k\big)^{-1}, \\
+  w^{i,(a^i,j)}_{k|k} &= w^{i,a^i}_{k|k-1}\, r^{i,a^i}_{k|k-1}\, p_D\,
+    \mathcal{N}\big(z^j_k;\, \hat z^{i,a^i}_{k|k-1},\, S^{i,a^i}_k\big), \\
+  r^{i,(a^i,j)}_{k|k} &= 1, \\
+  \mu^{i,(a^i,j)}_{k|k} &= \mu^{i,a^i}_{k|k-1} + K^{i,a^i}_k \big(z^j_k - \hat z^{i,a^i}_{k|k-1}\big), \\
+  P^{i,(a^i,j)}_{k|k} &= \big(I - K^{i,a^i}_k H\big) P^{i,a^i}_{k|k-1}.
+\end{align*}
 
 \subsubsection{PMBM reduction}
 
