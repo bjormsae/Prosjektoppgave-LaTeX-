@@ -1,7 +1,7 @@
 \section{The PMBM filter}
 \label{sec:pmbm}
 \begin{itemize}
-    \item Rule for this chapter: the standard PMBM as the literature defines it (\cite{garcia_2018_pmbm}). The choices and deviations of this work go in the method chapter.
+    \item Rule for this chapter: the standard PMBM as the literature defines it (\cite{garcia_2018_pmbm}). The choices and deviations of this work go in Chapter~\ref{sec:implementation}.
     \item Add a notation table that matches Section~\ref{sec:formulation}.
     \item The flow figure is taken from \cite{chalmers_mot_course}: redraw it, or make sure the caption and permission are in order.
 \end{itemize}
@@ -251,6 +251,19 @@ Under linear Gaussian assumptions and constant $p_D$, this is a standard Kalman 
 
 
 % =====================================================================
+\subsection{Track-oriented representation}
+\label{sec:pmbm-representation}
+\label{sec:anatomy-hyp}
+\begin{itemize}
+    \item Builds on the HO/TO discussion in Section~\ref{sec:families}; the PMBM stores its hypotheses track-oriented.
+    \item Each track is a tree of single-target hypotheses, one level per scan; the leaves are its current local hypotheses.
+    \item A global hypothesis is a look-up table: one leaf per track, or none.
+    \item Why it scales: a leaf is stored once and shared by many global hypotheses; pruning a global hypothesis removes the leaves nobody references any more.
+    \item The hybrid: track-oriented storage, hypothesis-oriented generation (Murty per prior global hypothesis, Section~\ref{sec:pmbm-da}), as in \cite{garcia_2018_pmbm} and in this work.
+    \item New figure: one small PMBM example drawn as hypothesis trees, with the table of global hypotheses as look-ups into the leaves. The HO/TO comparison figure is in Section~\ref{sec:families}.
+\end{itemize}
+
+% =====================================================================
 \subsection{Global hypotheses and data association}
 \label{sec:pmbm-da}
 \begin{itemize}
@@ -262,58 +275,7 @@ Under linear Gaussian assumptions and constant $p_D$, this is a standard Kalman 
     \item Cost: about $k \cdot n^3$ per prior hypothesis, so large clusters are expensive (link to Section~\ref{sec:complexity}). Alternative: Gibbs sampling \cite{gibbs_glmb}.
 \end{itemize}
 
-% =====================================================================
-\subsection{Track-oriented representation}
-\label{sec:pmbm-representation}
-\label{sec:anatomy-hyp}
-\begin{itemize}
-    \item Builds on the HO/TO discussion in Section~\ref{sec:families}; the PMBM stores its hypotheses track-oriented.
-    \item Each track is a tree of single-target hypotheses, one level per scan; the leaves are its current local hypotheses.
-    \item A global hypothesis is a look-up table: one leaf per track, or none.
-    \item Why it scales: a leaf is stored once and shared by many global hypotheses; pruning a global hypothesis removes the leaves nobody references any more.
-    \item The hybrid: track-oriented storage, hypothesis-oriented generation (Murty per prior global hypothesis, Section~\ref{sec:pmbm-da}), as in \cite{garcia_2018_pmbm} and in this work.
-    \item Redraw the figure below as hypothesis trees.
-    \item Points from the old hypothesis-representation subsection, to reuse:
-    \begin{itemize}
-        \item Only relevant when several hypotheses are kept.
-        \item When several hypotheses are kept, they can be stored in two ways. The distinction is mainly important for implementation.
-        \item In a hypothesis-oriented representation each global hypothesis carries its own complete set of tracks.
-        \item In a track-oriented representation each potential target keeps a tree of single-target hypotheses, and a global hypothesis is only a look-up of one leaf per target.
-        \item Explain how track-oriented storage works and why it scales better. And how it improves pruning as well.
-    \end{itemize}
-\end{itemize}
 
-\begin{figure}[htbp]
-\centering\small
-\begin{minipage}[t]{0.44\textwidth}\centering
-\textbf{Hypothesis-oriented}\par\medskip
-\begin{tabular}{l l}
-\toprule
-Global hyp. & Tracks (each stored in full) \\
-\midrule
-$H_1$ & $\tau_1^{a},\ \tau_2^{a}$ \\
-$H_2$ & $\tau_1^{b},\ \tau_2^{a}$ \\
-$H_3$ & $\tau_1^{a},\ \tau_2^{b},\ \tau_3^{a}$ \\
-\bottomrule
-\end{tabular}\par\medskip
-\textit{e.g.\ Reid's MHT, $\delta$-GLMB}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.52\textwidth}\centering
-\textbf{Track-oriented}\par\medskip
-\begin{tabular}{l l @{\qquad} l c c c}
-\toprule
-Target & Leaves & Global hyp. & $1$ & $2$ & $3$ \\
-\midrule
-$1$ & $\tau_1^{a},\tau_1^{b}$ & $H_1$ & $a$ & $a$ & -- \\
-$2$ & $\tau_2^{a},\tau_2^{b}$ & $H_2$ & $b$ & $a$ & -- \\
-$3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
-\bottomrule
-\end{tabular}\par\medskip
-\textit{e.g.\ track-oriented MHT, PMBM}
-\end{minipage}
-\caption{Two ways to store the same three global hypotheses. Left: each hypothesis holds full copies of its tracks. Right: single-target hypotheses are stored once per target, and global hypotheses are index tuples into them. \TODO{Optionally redraw as hypothesis trees.}}
-\label{fig:hyprep}
-\end{figure}
 
 % =====================================================================
 \subsection{PMBM reduction}
@@ -326,7 +288,7 @@ $3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
     \item N-scan pruning versus limiting the tree depth (the latter forgets history without forcing a decision).
     \item Recycling \cite{williams_pmbm_2015}: Bernoullis with low existence are approximated as Poisson components. Mass is moved, not lost, and the number of Bernoullis and hypotheses falls.
     \item Poisson intensity: prune small components; merge similar components (mixture reduction).
-    \item Moment matching of new Bernoullis (already in Section~\ref{sec:pmbm}) is also a reduction; refer back to it.
+    \item Moment matching of new Bernoullis (already in Section~\ref{sec:pmbm-update}) is also a reduction; refer back to it.
 \end{itemize}
 
 % =====================================================================
@@ -338,7 +300,8 @@ $3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
     \item Benefit: one short hypothesis list per cluster instead of one list over the product of all clusters; capping applies per cluster.
     \item Merge: clusters that gate a common measurement form one group, whose hypothesis list is the product of the clusters' lists.
     \item Split: when tracks no longer share a measurement in their histories, they become independent again (Kurien's rule).
-    \item The concrete merge and split rules of this work, and their approximations, are in the method chapter.
+    \item Breaking clusters up again is what keeps them small; it works best in sparse scenes (moved here from Section~\ref{sec:complexity}).
+    \item The concrete merge and split rules of this work, and their approximations, are in Chapter~\ref{sec:implementation}.
 \end{itemize}
 
 % =====================================================================

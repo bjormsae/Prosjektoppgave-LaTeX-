@@ -527,6 +527,56 @@ Walk through Table~\ref{tab:selection} for your own setting: heterogeneous senso
 \paragraph{Summary.}
 Two or three sentences: a tracker is a recipe of interchangeable blocks; families differ in how many association hypotheses they keep, which is largely a complexity decision; RFS is a modelling framework that mainly improves the existence block; and what your project takes from this.
 
+\subsubsection{Solver table (MTT overview)}
+\begin{table}[htbp]
+\centering\small
+\caption{Association problems and their exact and approximate solvers.
+  \TODO{Verify complexity statements and add references.}}
+\label{tab:solvers}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.6cm} X}
+\toprule
+Problem (used by) & Exact & Approximate \\
+\midrule
+Best single assignment (GNN, SORT) & Hungarian, auction, JVC (polynomial) & Greedy matching \\
+$k$ best assignments (MHT, PMBM, $\delta$-GLMB) & Murty's algorithm (polynomial in $k$) & Gibbs sampling, randomised $k$-best \\
+Marginal association probabilities (JPDA, JIPDA, PMB, LMB) & Full enumeration (\#P-hard in general) & $k$-best truncation, loopy belief propagation (LBP), MCMC/Gibbs \\
+Multi-frame assignment (N-scan MHT, batch) & Integer programming (NP-hard for $\geq 3$ frames) & Lagrangian relaxation, network flow (special cost structure) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Stubs from the old method chapter}
+An overview of the filter that has been implemented in this project.
+
+\paragraph{Single scan overview}
+Pseudocode for a single scan.
+
+\paragraph{The state}
+PPP and MBM, local and global hypotheses, clusters, tracks
+
+\paragraph{Prediction}
+N-vector
+
+\paragraph{Gating}
+According to the n-vector gating presented in the paper.
+
+\paragraph{Single hypothesis update}
+PPP, existing (detected and misdetected), new Bernoulli.
+
+\paragraph{Data association}
+Building the reward matrix. Running Murty per cluster.
+
+
+\subsubsection{Supervisor meeting notes (old results chapter)}
+Meeting notes:
+\begin{itemize}
+    \item MTT overview: some is very vision based. Problem formulation should probably be narrowed down even more to eliminate this angle. Trash the separate RFS angle, but highlight the historic difference in the literature anyway.
+    \item Get a good description of a PMBM filter and how the implementation differs from the standard formulation.
+    \item Describe in detail how the specific deviations are handled and why.
+    \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
+\end{itemize}
+
+
 \subsubsection{Notes for the theory section (PMBM chapter)}
 All points are answered by the new structure.
 \begin{itemize}

@@ -1,16 +1,65 @@
 \section{Results}
-Meeting notes:
+\label{sec:results}
 \begin{itemize}
-    \item MTT overview: some is very vision based. Problem formulation should probably be narrowed down even more to eliminate this angle. Trash the separate RFS angle, but highlight the historic difference in the literature anyway.
-    \item Get a good description of a PMBM filter and how the implementation differs from the standard formulation.
-    \item Describe in detail how the specific deviations are handled and why.
-    \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
+    \item One section per research question. Every number from one frozen commit, stated in Section~\ref{sec:res-setup}.
 \end{itemize}
 
-\subsection{Actual results}
-First list what has actually been done in this project.
+% =====================================================================
+\subsection{Evaluation setup}
+\label{sec:res-setup}
 \begin{itemize}
+    \item GOSPA \TODO{add Rahmathullah, Garc\'ia-Fern\'andez \& Svensson 2017 to the bib}: definition, $p = 2$, $\alpha = 2$ (splits into localization, missed and false), cut-off $c = 1000$~m $\approx 3.3\sigma$, great-circle distance. Why not MOTA/HOTA.
+    \item Derived numbers: missed and false shares per true vessel-scan, RMSE, run time per scan, largest cluster.
+    \item Truth: vessels inside the field of view. Tracks of vessels that just left count as false.
+    \item Baselines: the original single-list PMBM (``stock''), and the single-plane geometry.
+    \item Seeds, number of scans, commit hash, hardware, parallel runs (timing uncertainty).
+\end{itemize}
+
+% =====================================================================
+\subsection{Geometry (RQ2)}
+\label{sec:res-geometry}
+\begin{itemize}
+    \item Baseline versus n-vector on the proof-of-concept window and the scale windows: same GOSPA, estimates within millimetres.
+    \item The error-budget figure (Section~\ref{sec:nvector-error}), and the effect of leaving out the rotation (Section~\ref{sec:nvector-transport}).
+    \item Run-time cost of the geometry: 1.3--1.7$\times$.
+    \item From the old notes:
+    \begin{itemize}
     \item Implemented N-vector exact spherical CV prediction on an existing PMBM filter implementation. Maybe compare predictions, and argue why better prediction tools are needed for this to be effective. But then, why bother in the first place? Interesting argument. Look into this further.
+    \end{itemize}
+\end{itemize}
+
+% =====================================================================
+\subsection{Scale (RQ1)}
+\label{sec:res-scale}
+\begin{itemize}
+    \item The scale ladder, 12--100~km: run time and accuracy, stock versus clustered, largest cluster.
+    \item Honest reading: at low clutter up to 25~km the stock tracker is as accurate and faster; clustering pays off with clutter and size.
+    \item From the old notes:
+    \begin{itemize}
     \item Implemented clustering and splitting for efficient scaling. Need some concrete results here for how the implementation is better. Also discuss how effective the splitting is and what causes it to fail. 
+    \end{itemize}
+\end{itemize}
+
+% =====================================================================
+\subsection{Clutter and recycling (RQ1)}
+\label{sec:res-clutter}
+\begin{itemize}
+    \item Clutter $10^{-9}$, $10^{-8}$ and $10^{-7}$ per m$^2$, with and without recycling; the recycle-threshold sweep.
+    \item Tie to cluster size: low-existence Bernoullis are what link clusters.
+    \item From the old notes:
+    \begin{itemize}
     \item Added simple recycling as well. Tie this into the splitting and show concrete results based on maximum cluster size and why this matters a lot. 
+    \end{itemize}
+\end{itemize}
+
+% =====================================================================
+\subsection{Limits (RQ3)}
+\label{sec:res-limits}
+\begin{itemize}
+    \item Revisit sweep (60 to 900~s) on one scene: missed and false shares, GOSPA, run time, largest group, gate radius.
+    \item The three regimes where a scan takes more than 5--10~s: many vessels at short revisit, long revisit, high clutter over a large area. What dominates in each.
+    \item From the supervisor meeting:
+    \begin{itemize}
+    \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
+    \end{itemize}
 \end{itemize}

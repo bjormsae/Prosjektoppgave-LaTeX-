@@ -1,2 +1,28 @@
 \section{Discussion}
-Here we must discuss the results.
+\label{sec:discussion}
+
+\subsection{Scale and clutter (RQ1)}
+\begin{itemize}
+    \item What made the tracker scale, and what it cost in accuracy.
+    \item How effective the splitting is and why it fails: chaining of harbour vessels by new tracks' gates, truncation creating spurious dependence.
+\end{itemize}
+
+\subsection{Geometry (RQ2)}
+\begin{itemize}
+    \item No gain at this scale, as expected from Section~\ref{sec:nvector-error}. Why do it anyway: it is an investment for the thesis setting, at a cost of 1.3--1.7$\times$ run time.
+    \item The rotation as a correction to the paper, independent of the results.
+\end{itemize}
+
+\subsection{Limits (RQ3)}
+\begin{itemize}
+    \item The long-revisit problem: gates grow, groups percolate into one, Murty dominates.
+\end{itemize}
+
+\subsection{Limitations of the study}
+\begin{itemize}
+    \item Seeds and confidence intervals; one region; mostly stationary vessels.
+    \item Matched priors: birth rate and initial intensity taken from the truth.
+    \item Constant $\PD$: tracks of vessels just outside the field of view count as false.
+    \item Untuned process noise (position NEES 3.0, 2 if consistent).
+    \item Simulated measurements on real tracks; no real sensor data.
+\end{itemize}

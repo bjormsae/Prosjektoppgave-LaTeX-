@@ -1,166 +1,73 @@
-\section{Method}
-
-\subsection{Process model}
-The process model used in this project is the planar CV-model (constant velocity). To derive the discrete time model we start with a model using continuous white noise acceleration. It can be written as $\mathbf{\dot{x}} = \mathbf{Ax} + \mathbf{Gn}$ where $\mathbf{x}$ is the state vector and $\mathbf{n}$ is the process noise. The vectors and matrices are defined as the following.
-
-\[
-\begin{array}{c@{\qquad\qquad}c@{\qquad\qquad}c}
-\mathbf{x} = \begin{bmatrix} p_x \\ p_y \\ v_x \\ v_y \end{bmatrix}
-&
-\mathbf{A} = \begin{bmatrix}
-0 & 0 & 1 & 0 \\
-0 & 0 & 0 & 1 \\
-0 & 0 & 0 & 0 \\
-0 & 0 & 0 & 0
-\end{bmatrix}
-&
-\mathbf{G} =
-\begin{bmatrix}
-0 & 0 \\
-0 & 0 \\
-1 & 0 \\
-0 & 1
-\end{bmatrix}
-\end{array}
-\]
-The noise $\mathbf{n}$ is defined as
-\[
-\mathbf{n} \sim \mathcal{N}(\mathbf{0}, \mathbf{D}\delta(t - \tau)) \text{ where } \mathbf{D} = 
-\begin{bmatrix}
-    \sigma_a^2 & 0 \\
-    0 & \sigma_a^2
-\end{bmatrix}
-\]
-The continuous time model can then be discretized into the following using LTI equations and Van Loan's formula \cite{VanLoan}. The resulting discrete time model is shown below. Here, $T$ is the sampling time.
-
-\[
-x_{k} = F x_{k-1} + q_{k-1}, \qquad q_{k-1} \sim \mathcal{N}(0, Q),
-\]
-
-\[
-\begin{array}{c@{\qquad\qquad}c}
-F = \begin{bmatrix}
-1 & 0 & T & 0 \\
-0 & 1 & 0 & T \\
-0 & 0 & 1 & 0 \\
-0 & 0 & 0 & 1
-\end{bmatrix}
-&
-Q = \sigma_a^2
-\begin{bmatrix}
-\dfrac{T^3}{3} & 0 & \dfrac{T^2}{2} & 0 \\[2mm]
-0 & \dfrac{T^3}{3} & 0 & \dfrac{T^2}{2} \\[2mm]
-\dfrac{T^2}{2} & 0 & T & 0 \\[2mm]
-0 & \dfrac{T^2}{2} & 0 & T
-\end{bmatrix}
-\end{array}
-\]
-
-\subsection{Measurement models}
-
-\subsubsection{Synthetic Aperture Radar (SAR)}
-SAR is a type of radar that can be affixed to either satellites or aircraft, moving above the earths surface. There is a lot that can be said about SAR and detecting objects using it. The detection algorithms can be very complex beasts and there is a whole field of research dedicated to just detecting objects using SAR. Here however, we will be using very simple models for the detections. We abstract away the detector entirely and assume only position is retuned. The detector will also return a possibly empty set of false detections. This means that a clutter model should also be included when updating states from a SAR measurement.
-\medskip
-
-A standard assumption for SAR detectors is that objects are stationary. When this assumption is invalidated, phenomena such as SAR azimuth shift can occur. SAR azimuth shift occurs when an object has a velocity component that is perpendicular to the radar platform velocity vector \cite{SAR_azimuth_shift}. The geometry and result can be seen in \autoref{fig:sar_azimuth_shift}, where the imaged position is shifted in relation to the true position.
-
-\begin{figure}[htp]
-    \centering
-    \includegraphics[width=0.95\textwidth]{Images/sar_azimuth_shift.png}
-    \caption{Depicting the geometry of SAR azimuth shift. Subfigure $(a)$ shows the decomposed target velocity vector alongside the velocity vector of the radar platform. Subfigure $(b)$ shows the projected velocity component into the line of sight. This is the component that causes the Doppler offset.}
-    \label{fig:sar_azimuth_shift}
-\end{figure}
-
-Since the azimuth shift is a known deterministic phenomenon, it can be compensated for. The main difficulty regarding compensation is that the velocity vector of the moving target must be known. This is fine for simulating measurements, but robust estimation of velocity in a multi target tracking scenario may be infeasible. It may also be unwanted, since using estimated states to compensate the measurement ruins the linear assumptions of the filtering, and may cause unforeseen consequences.
-\medskip
-
-There are two other ways one could incorporate azimuth shift in the measurement model. One alternative is to increase the noise of each measurement based on the absolute velocity of each vessel. It is generally easier to get a good estimate of how fast something is moving than to estimate the direction as well. This yields the measurement model below and may yield better results than estimating the exact azimuth shift. It does however also invalidate the linear assumptions of the filter and needs to be tested rigorously in various conditions.
-\[
-z = Hx + v(\nu), \quad H = \begin{bmatrix} I & 0 \end{bmatrix}
-\]
-With the noise $v(\nu)$ is defined as
-\[
-v(\nu) \sim \mathcal{N}(\mathbf{0}, \mathbf{R}(\nu))
-\]
-Where $\mathbf{R}$ is the measurement noise covariance matrix.
-\medskip
-
-The last approach is to just increase the measurement noise, but keep it constant for all measurements. This keeps the filter linear and is in many ways the ``safest'', but it will reduce the value of measurements where the vessel is at low velocity.
-\medskip
-
-It is also worth noting that SAR detectors could possibly return more information than just positions, but that will not be considered in this report.
-
-\subsubsection{Navigation Radar Detector (NRD)}
-NRD is a satellite borne detector, which tracks and locates the radar signals from civilian navigation radars \cite{nrd_ffi}. For tracking this means that the detector can be abstracted away, leaving a pure position measurement. What is special about NRD is that it can report the uncertainty of the measurement alongside each measurement. This means $R$ can be individual to each measurement. In general, the uncertainty increases radially around the center point of our measurement. This is useful for both simulation and filtering since the uncertainty is dependent on the measurement position and not the state position. One strength with NRD is that since it only detects radar signals, false positives are almost non-existent. This means that the measurements can be assumed to have a clutter intensity of almost zero. The measurement model, stated for completeness is then:
-
-\[
-z_i = Hx + v_i, \quad H = \begin{bmatrix} I & 0 \end{bmatrix}
-\]
-With the noise $v_i$ is defined as
-\[
-v_i \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_i)
-\]
-Where $\mathbf{R}_i$ is the measurement noise covariance matrix, which is individual to each measurement.
-
-\subsubsection{Electro-optical (EO) measurements}
-As with both SAR and NRD, Electro-optical detectors are complicated and best abstracted away. Again, we are left with a direct position measurement on the form:
-
-\[
-z = Hx + v, \quad H = \begin{bmatrix} I & 0 \end{bmatrix}
-\]
-With the noise $v$ is defined as
-\[
-v \sim \mathcal{N}(\mathbf{0}, \mathbf{R})
-\]
-Where $\mathbf{R}$ is the measurement noise covariance matrix. In the case of EO, the variance is not reported by the sensor, thus we model all measurements with the same covariance matrix $\mathbf{R}$.
-
-\subsection{Measurement simulator}
+\section{Tracker implementation}
+\label{sec:implementation}
+\label{sec:method}
 \begin{itemize}
-    \item Using historic AIS-data as ground truth. Downloaded from Kystverket. Used linear interpolation between data points to achieve continuous time sampling. Removed velocity spikes to also include velocity in the "ground truth" (needed for accurate SAR sampling).
-    \item Added SAR, NRD and EO measurements to be Gaussian in the local North-East frame. Sampling is done by adding the zero mean Gaussian to the sampled N-vector.
-    \item Added uniform clutter to the simulator.
-    \item The sensor area is defined by a circle with center N-vector and measurement radius. This is done because the within sensor-checks become trivial dot products with N-vectors.
+    \item Rule for this chapter: only where the implementation differs from the standard PMBM of Chapter~\ref{sec:pmbm} and the geometry of Chapter~\ref{sec:nvector}, and why. Do not repeat every block.
+    \item The process model moved to Section~\ref{sec:model-this-work}; the sensor models moved to Chapter~\ref{sec:simulator}.
 \end{itemize}
 
-\subsection{Changes made to the existing PMBM implementation}
+% =====================================================================
+\subsection{Starting point}
+\label{sec:impl-start}
 \begin{itemize}
+    \item The AIS-IMM-PMBM implementation (2024, MIT licence): what it was built for (radar plus AIS, IMM), and what was kept (track trees, Murty, the update equations). About one page.
+    \item What blocked scaling, with evidence: crashes beyond about 40 measurements per scan, and one global hypothesis list (the island experiment: 1.1 of 128 targets recalled, 91 of 128 with independent groups).
+    \item From the old notes:
+    \begin{itemize}
     \item Initial testing showed that the existing implementation would not scale up to the required size for real maritime surveillance. Clustering and gating needed to be implemented.
+    \end{itemize}
+\end{itemize}
+
+% =====================================================================
+\subsection{Deviations from the standard PMBM}
+\label{sec:impl-deviations}
+\begin{itemize}
+    \item One table: deviation, inherited or introduced, effect, status.
+    \item Deviations from the equations: no new Bernoulli for a measurement outside every Poisson gate (D1, no effect while the birth covers the field of view); birth as one Gaussian at the centre instead of uniform (D3); low-existence Bernoullis removed without renormalizing.
+    \item Scaling limits of the original (the motivation for Sections~\ref{sec:impl-clustering}--\ref{sec:impl-other}): one global hypothesis list, the $\epsilon$-auction inside Murty, the reward matrix rebuilt per prior hypothesis, no recycling.
+    \item Implementation defects: one paragraph here, the list in Appendix~\ref{app:defects}.
+\end{itemize}
+
+% =====================================================================
+\subsection{One scan of the implemented tracker}
+\label{sec:impl-scan}
+\begin{itemize}
+    \item Pseudocode or a timeline of one scan in the order the code runs: Poisson part, existing tracks, association per group, recycling, estimation. Mark each reduction where it happens.
+    \item Mark where it differs from Chapter~\ref{sec:pmbm}.
+\end{itemize}
+
+% =====================================================================
+\subsection{n-vector integration}
+\label{sec:impl-nvector}
+\begin{itemize}
+    \item Implemented in an equivalent direct form: each Gaussian (Bernoulli leaf, Poisson component) carries an anchor n-vector, the origin of its own North-East plane; the state is an offset in that plane. Why: the Kalman equations and the state layout stay unchanged.
+    \item The innovation is the measurement in the anchor's plane minus $Hx$; after an update the anchor moves onto the posterior mean.
+    \item Gaussian mixtures across planes: a new Bernoulli's moment matching (Section~\ref{sec:pmbm-update}) needs every gated Poisson component re-anchored into the measurement's plane first.
+    \item Birth anchored at the centre of the field of view.
+    \item Gating: one matrix product of all anchors against all measurements per scan discards far pairs, then the exact Mahalanobis test; the gated set equals brute force. The paper's cluster borders and measurement-to-measurement gate are not needed, because clusters are formed from the gated measurements.
+    \item The single-plane baseline: the same tracker on measurements projected into one North-East plane at the centre of the field of view.
+    \item Verification: unit tests against the nvector library and an exact spherical Monte Carlo.
+    \item From the old notes:
+    \begin{itemize}
+    \item Added N-vector great circle prediction. 
+    \end{itemize}
+\end{itemize}
+
+% =====================================================================
+\subsection{Clustering}
+\label{sec:impl-clustering}
+\begin{itemize}
+    \item The concrete rules: group clusters that gate a common Poisson-gated measurement; product of hypothesis lists, truncated; Murty and pruning per group; split by Kurien's rule.
+    \item Approximations: truncation; conflicts older than the tree depth (10 scans) are forgotten.
+    \item A split based on mutual information was tried and dropped: the truncation itself creates spurious dependence, so clusters never split.
+    \item With everything in one cluster it reproduces the original tracker exactly (tested).
+    \item From the old notes:
+    \begin{itemize}
     \item Clustering merge: Whose children use the same Poisson-gated measurement form one group. The prior hypotheses are the product of their lists, truncated to the best N hypotheses,
     \item Clustering split: tracks whose surviving leaves' histories share no measurement go to separate clusters, each with the marginal of the hypothesis list (Kurien's MHT rule).
-    \item Multiple small bug fixes that either led to a speed-up or fixed crashes from scaling.
-    \item Added N-vector great circle prediction. 
-    \item Birth and survival rate are now per second. This is done for consistency and to allow for different measurement intervals.
+    \end{itemize}
 \end{itemize}
 
-\subsection{The big problem}
-\begin{itemize}
-    \item Predicting over large horizons leads to very large uncertainties in position. This makes gating and clustering ineffective because everything is put into the same data association algorithm. How can we combat this? 
-    \item More frequent measurements. Find out what the limit is for the clustering.
-    \item More accurate prediction. This would also handle cases such as ferries which can have high speeds, but switch direction before a new measurement has time to arrive. 
-\end{itemize}
-
-\subsection{The PMBM filter implementation}
-An overview of the filter that has been implemented in this project.
-
-\subsubsection{Single scan overview}
-Pseudocode for a single scan.
-
-\subsubsection{The state}
-PPP and MBM, local and global hypotheses, clusters, tracks
-
-\subsubsection{Prediction}
-N-vector
-
-\subsubsection{Gating}
-According to the n-vector gating presented in the paper.
-
-\subsubsection{Single hypothesis update}
-PPP, existing (detected and misdetected), new Bernoulli.
-
-\subsubsection{Data association}
-Building the reward matrix. Running Murty per cluster.
-
-\subsubsection{Clustering}
 Each cluster runs its own PMBM filter independently, with probabilities normalized within each cluster. There are two immediate benefits from using clustering for tracking. We don't need as many hypotheses per cluster and the association becomes far cheaper. 
 \medskip
 
@@ -181,7 +88,15 @@ Splitting of clusters is not done explicitly. Rather, after data association is 
     \item The maximum tree depth is what allows the splitting to work efficiently. 
 \end{itemize}
 
-\subsubsection{Reduction}
+% =====================================================================
+\subsection{Recycling}
+\label{sec:impl-recycling}
+\begin{itemize}
+    \item The special case implemented: a cluster with one track and one hypothesis whose Bernoulli has $r < 0.2$ becomes a Poisson component with weight $r$.
+    \item Why: low-existence Bernoullis linked clusters into giant groups, and their evidence was lost in truncation.
+    \item In practice almost all recycled Bernoullis are new ones born on clutter or on unconfirmed detections (98\,\% were never confirmed).
+\end{itemize}
+
 Capping, tree pruning, recycling.
 
 \begin{itemize}
@@ -191,5 +106,37 @@ Capping, tree pruning, recycling.
     \item The reason for recycling these components is mainly to allow for higher clutter scenarios without blowing up runtime. In a high clutter scenario without recycling, new Bernoulli components will quickly connect clusters and make the association step a bottleneck.
 \end{itemize}
 
-\subsubsection{Target estimation}
+% =====================================================================
+\subsection{Other changes}
+\label{sec:impl-other}
+\begin{itemize}
+    \item Birth and survival per second instead of per scan: consistent when the scan interval varies.
+    \item Exact assignment (linear sum assignment) inside Murty instead of the $\epsilon$-auction.
+    \item Deterministic ordering of new Bernoullis: runs are reproducible bit for bit.
+    \item The Poisson gate uses $S = HPH^{\mathsf{T}} + R$, as the Bernoulli gate does.
+    \item Speed-ups that do not change results: one sentence, the list in Appendix~\ref{app:speedups}.
+    \item From the old notes:
+    \begin{itemize}
+    \item Birth and survival rate are now per second. This is done for consistency and to allow for different measurement intervals.
+    \item Multiple small bug fixes that either led to a speed-up or fixed crashes from scaling.
+    \end{itemize}
+\end{itemize}
+
+% =====================================================================
+\subsection{Estimation}
+\label{sec:impl-estimation}
+\begin{itemize}
+    \item The best hypothesis of every cluster; their union is the best hypothesis overall. Bernoullis with $r > 0.5$ are reported.
+    \item Estimates exist only at scan times; the history is stitched from per-scan best hypotheses, and not revised when the best hypothesis flips.
+\end{itemize}
+
 How targets are formed from hypotheses and existence probabilities.
+
+% =====================================================================
+\subsection{Parameters}
+\label{sec:impl-parameters}
+\begin{itemize}
+    \item One table: parameter, value, why. Detection probability, clutter density and $\sigma$ copied from the sensor; process noise $0.1^2$~m$^2$/s$^3$ (not tuned); initial velocity std 5~m/s (swept); survival 0.99999 per second; gate $3.5^2$; 100 hypotheses per cluster; Bernoulli removal $10^{-6}$; recycle threshold 0.2 (swept); initial intensity and birth rate matched to the truth.
+    \item Say plainly which parameters use the truth (initial intensity, birth rate): a matched-prior simulation.
+    \item The sweeps themselves go in Appendix~\ref{app:sweeps}.
+\end{itemize}
