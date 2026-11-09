@@ -1,21 +1,11 @@
 % =====================================================================
-% DESIGN PRINCIPLES (why the section is built this way)
-%   1. Building blocks are the backbone. Every method is described as a
-%      "recipe": one choice per block. Blocks can be mixed and matched
-%      (classical or learned), and even methods that do not fit the
-%      pipeline are described by WHICH blocks they fuse or replace.
-%   2. Funnel: problem -> blocks -> complexity -> multiple sensors ->
-%      map -> families -> methods outside the pipeline -> comparison
-%      and design guide.
-%   3. Families are defined by ONE axis: how many association hypotheses
-%      are kept. RFS is a modelling framework (a column in the map), not
-%      a family, so PMBM sits next to track-oriented MHT, delta-GLMB next
-%      to hypothesis-oriented MHT, and PMB/LMB next to JIPDA.
-%   4. Complexity management and multi-sensor handling are cross-cutting:
-%      one subsection each, and each family is placed on the same
-%      "approximation ladder".
-%   5. One colour per family, reused in EVERY figure and table.
-%   6. One question per artifact; each closes with a one-sentence hand-off.
+% STRUCTURE (agreed 2026-11-09): one circle.
+%   problem (2.1) -> what makes it hard (2.2) -> the blocks that address
+%   each difficulty (2.3) -> the price: complexity (2.4) -> families as
+%   points on the complexity funnel (2.5) -> back to the problem: the
+%   choice for this work (2.6).
+%   Setting and scope live in the introduction (Sec. sec:scope).
+%   Target length: 7-8 pages. Material moved out is in the appendix.
 % =====================================================================
 
 % ---------- shared style: family colours, marks, helpers -------------
@@ -61,15 +51,27 @@
   \node[blk, minimum width=\mttw cm, text width=\mtttw cm, #5] at (\mttcx,#3) {#4};}
 
 % =====================================================================
-\section{Multi-Target Tracking: An overview}
+\section{Multi-target tracking}
 \label{sec:mtt-overview}
-
-% ---- Opening + reading guide --------------------------------------
-Multi-target tracking (MTT) is the problem of estimating the number of targets and their states over time from noisy, incomplete and ambiguous sensor data. This section is organized around one idea: \emph{a tracker is assembled from interchangeable building blocks}, and the named methods in the literature result from particular block choices. Section~\ref{sec:formulation} states the problem and why it is hard. Section~\ref{sec:anatomy} introduces the blocks and the options for each. Section~\ref{sec:complexity} shows that many of these options exist to manage combinatorial complexity, and Section~\ref{sec:multisensor} covers the second concern that cuts across the blocks: combining data from several sensors. Section~\ref{sec:map} uses the blocks to draw a map of the field, and Section~\ref{sec:families} describes each family in detail. Section~\ref{sec:outside} covers methods that do not fit completely into the standard pipeline. Section~\ref{sec:selection} compares the families and turns the comparison into design choices for this project. Colors identify families consistently throughout.
+\label{sec:mtt}
+\begin{itemize}
+    \item Short opening: one paragraph that states the circle above, so the reader knows why each section follows the previous one.
+\end{itemize}
 
 % =====================================================================
 \subsection{Problem formulation}
 \label{sec:formulation}
+\begin{itemize}
+    \item Start from the scope in Section~\ref{sec:scope}: point targets, position-only detections from a detector treated as a black box.
+    \item State the model in general form, so the blocks in Section~\ref{sec:anatomy} have something to vary: survival $\PS(x)$, transition $f(x_k \mid x_{k-1})$, birth as a Poisson intensity $\lambda^b$, detection $\PD(x)$, likelihood $h(z \mid x)$, clutter as a Poisson point process with intensity $\lambda^c(z)$ (condense the definitions in Appendix~\ref{app:condense}).
+    \item Measurement set $Z_k = O_k \cup C_k$, origin of each measurement unknown (fix the set notation below).
+    \item Association hypothesis $\theta$: which measurement came from which target, a new target or clutter. Constraint: each target generates at most one measurement, and each measurement has exactly one origin.
+    \item Goal: the multi-target posterior $f(X_k \mid Z_{1:k})$, computed recursively, with estimates extracted from it. Two equations: prediction (multi-target Chapman--Kolmogorov) and update (Bayes). Replaces the MAP formulation (moved to the appendix).
+    \item Online versus batch: one sentence. This work is online; smoothing and batch methods are mentioned as further work.
+    \item End with the model used in this work (Section~\ref{sec:model-this-work}): the process model moved in from the old method chapter, plus a small table, ``in this work'': constant velocity in a local North-East plane, $H = [I\ 0]$, $R = \sigma^2 I$, constant $\PD$, constant clutter density, Poisson birth, survival per second.
+    \item Fix the notation here and use it in Chapter~\ref{sec:pmbm}: $\PD$, $\PS$, $h(z \mid x)$ as a likelihood, $\lambda^c$, $\lambda^b$, $\lambda^u$.
+\end{itemize}
+
 The following problem statement is based on the commonly used Detection Based Tracking (DBT) paradigm. This formulation assumes that a detector supplies detections of objects in a sensors field of view (FOV)\footnote{The addition of clutter (false alarms) and probability of detection ($\PD$) less than one arises naturally from classical detection theory, where detecting noisy objects leads to an inevitable tradeoff between lots of clutter and a high $\PD$ \cite{detection_theory}.}.
 \medskip
 
@@ -78,21 +80,94 @@ Let $X_k=\{\mathbf{x}_k^{1},\dots,\mathbf{x}_k^{N_k}\}$ be the set of target sta
 
 $Z_k = \{\mathbf{z}_k^{1},\dots,\mathbf{z}_k^{M_k} \bigcup \mathbf{C}_k\}$ is the set of measurements received.
 The set $Z_k$ contains both measurements generated by targets $\mathbf{z}_k^i$ and clutter $\mathbf{C}_k$, and the origin of each measurement is unknown. Clutter is generated according to a clutter model.
-\medskip
+\TODO{Rewrite: drop ``DBT'' (a vision term) for ``detection-based point-target tracking''. Write $Z_k = O_k \cup C_k$ (the $\cup$ is currently inside the braces, and $M_k$ is used for the number of target measurements).}
 
-MTT aims to estimate the optimal sequential states $X_{1:t}$, based on the measurements $Z_{1:t}$. This can be formulated as the following MAP (Maximum a posteriori) estimation problem as presented in \cite{mtt_litterary_review}.
+\subsubsection{The model used in this work}
+\label{sec:model-this-work}
+\begin{itemize}
+    \item The process model below (moved from the method chapter). Write the state as position and velocity in a local North-East plane, $[p_N, v_N, p_E, v_E]$ or $[p, v]$, and use the same notation in Chapter~\ref{sec:nvector}.
+    \item Add the measurement model: $z = Hx + w$, $H = [I\ 0]$, $R = \sigma^2 I$.
+    \item Add constant $\PD$, constant clutter density $\lambda^c$, Poisson birth. Survival per second is an implementation choice (Chapter~\ref{sec:implementation}).
+    \item The sensor-specific noise models (EO, SAR, NRD) are generative models of the simulator (Chapter~\ref{sec:simulator}), not of the tracker.
+\end{itemize}
 
-\begin{equation*}
-  \widehat{\mathbf{X}}_{1:t} = \operatorname*{arg\,max}_{\mathbf{X}_{1:t}} P\left(\mathbf{X}_{1:t} \mid \mathbf{Z}_{1:t}\right).
-\end{equation*}
+The process model used in this project is the planar CV-model (constant velocity). To derive the discrete time model we start with a model using continuous white noise acceleration. It can be written as $\mathbf{\dot{x}} = \mathbf{Ax} + \mathbf{Gn}$ where $\mathbf{x}$ is the state vector and $\mathbf{n}$ is the process noise. The vectors and matrices are defined as the following.
 
-\textcite[Sec.~2]{mtt_litterary_review} then writes that ``different MOT algorithms from previous works can now be thought as designing different approaches to solving the above MAP problem, either from a probabilistic inference perspective or a deterministic optimization perspective.''
-\medskip
+\[
+\begin{array}{c@{\qquad\qquad}c@{\qquad\qquad}c}
+\mathbf{x} = \begin{bmatrix} p_x \\ p_y \\ v_x \\ v_y \end{bmatrix}
+&
+\mathbf{A} = \begin{bmatrix}
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0
+\end{bmatrix}
+&
+\mathbf{G} =
+\begin{bmatrix}
+0 & 0 \\
+0 & 0 \\
+1 & 0 \\
+0 & 1
+\end{bmatrix}
+\end{array}
+\]
+The noise $\mathbf{n}$ is defined as
+\[
+\mathbf{n} \sim \mathcal{N}(\mathbf{0}, \mathbf{D}\delta(t - \tau)) \text{ where } \mathbf{D} = 
+\begin{bmatrix}
+    \sigma_a^2 & 0 \\
+    0 & \sigma_a^2
+\end{bmatrix}
+\]
+The continuous time model can then be discretized into the following using LTI equations and Van Loan's formula \cite{VanLoan}. The resulting discrete time model is shown below. Here, $T$ is the sampling time.
 
-Tracking can also be split into online and batch methods. Online trackers process measurements recursively and will be the main focus of this overview. Batch methods process multiple sets of measurements and estimate the entire tracks jointly. \TODO{Maybe add that a lot of probabilistic inference is recursive and a lot of batch methods are optimization based. Need sources for this.}
+\[
+x_{k} = F x_{k-1} + q_{k-1}, \qquad q_{k-1} \sim \mathcal{N}(0, Q),
+\]
 
-\subsubsection{Why is MTT difficult?}
+\[
+\begin{array}{c@{\qquad\qquad}c}
+F = \begin{bmatrix}
+1 & 0 & T & 0 \\
+0 & 1 & 0 & T \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1
+\end{bmatrix}
+&
+Q = \sigma_a^2
+\begin{bmatrix}
+\dfrac{T^3}{3} & 0 & \dfrac{T^2}{2} & 0 \\[2mm]
+0 & \dfrac{T^3}{3} & 0 & \dfrac{T^2}{2} \\[2mm]
+\dfrac{T^2}{2} & 0 & T & 0 \\[2mm]
+0 & \dfrac{T^2}{2} & 0 & T
+\end{bmatrix}
+\end{array}
+\]
+
+% =====================================================================
+\subsection{What makes MTT difficult}
+\label{sec:difficulties}
+\begin{itemize}
+    \item List the difficulties in prose. Their table moves to Section~\ref{sec:anatomy}, where it is merged with the design-space table.
+    \item Worked example: one target in clutter (condense from Appendix~\ref{app:condense}). The posterior is a mixture with $m_k+1$ terms per scan (missed detection plus one term per measurement), so after $k$ scans it has $\prod_i (m_i+1)$ terms.
+    \item With $n$ targets: the number of association hypotheses per scan grows combinatorially in $n$ and $m$. One formula or a small table of counts.
+    \item Hand-off: each block in Section~\ref{sec:anatomy} addresses one of the difficulties.
+\end{itemize}
+
 There are a handful of features which makes the MTT problem hard to solve. It is worth stating these explicitly, as the building blocks of an MTT algorithm are made to address different problems. \autoref{tab:challenges} lists the main difficulties and which parts of the tracker that addresses this difficulty.
+
+
+% =====================================================================
+\subsection{Anatomy of a tracker: the building blocks}
+\label{sec:anatomy}
+\begin{itemize}
+    \item Keep the pipeline figure and the paragraph after it.
+    \item Blocks are interchangeable \emph{in principle, with constraints}. Example: closed-form Gaussian-mixture implementations need linear-Gaussian models and a constant or piecewise-constant $\PD$.
+    \item Merge the two tables below into one: \emph{difficulty $\rightarrow$ block $\rightarrow$ options}. This table is the circle of the chapter. Use maritime options, drop the learned column, and keep learned long-horizon prediction as an option in the motion-model row.
+    \item Hypothesis representation is no longer a block: it is a property of the multiple-hypothesis family (Section~\ref{sec:families}) and is described with the PMBM in Section~\ref{sec:pmbm-representation}.
+\end{itemize}
 
 \begin{table}[htbp]
 \centering\small
@@ -110,10 +185,6 @@ Combinatorial explosion. Over time, the posterior will contain exponentially man
 \bottomrule
 \end{tabularx}
 \end{table}
-
-% =====================================================================
-\subsection{Anatomy of a tracker: the building blocks}
-\label{sec:anatomy}
 
 The following section will present the main building blocks of a multi target tracker. Note that the breakdown into blocks is most useful for describing online recursive tracking methods, which will become clear when characterizing named methods in literature based on block choices. Depending on the method, these blocks may be more or less intertwined or implicitly handled. This section will nonetheless express these blocks as easily interchangeable, since it can be a very useful abstraction. Thinking of a tracker in terms of building blocks is also useful since the blocks themselves tie back to the inherent difficulties of the tracking problem as presented in \autoref{tab:challenges}. All feasible algorithms aiming to solve the MTT problem need to address these difficulties in some way.
 
@@ -150,8 +221,6 @@ The following section will present the main building blocks of a multi target tr
 \autoref{fig:pipeline} shows the building blocks and information flow of a recursive tracker. State predictions and detections are gated before doing inference. Inference is often broken down into data association, state update and hypothesis management. The leftover tracks are then predicted again until new detections arrive. Some factors like the sensor model have been omitted from the figure since it is used implicitly in multiple places in the pipeline. \autoref{fig:pipeline} should therefore be seen in combination with \autoref{tab:designspace}, where each block has been decomposed into the actual choices that can be made for each block. \autoref{tab:designspace} then includes examples of both classical and learned options for each choice.
 \medskip
 
-To illustrate the modularity of tracking algorithms we will present an example in the form of StrongSORT \cite{strongSORT}, which takes DeepSORT~\cite{deepSORT} and upgrades it one block at a time. In the terms of \autoref{tab:designspace}, DeepSORT combines a learned front-end (CNN detector) and a learned re-ID association cost with an otherwise classical back-end: a constant-velocity Kalman filter, Mahalanobis gating, hard association solved by Hungarian matching in a cascade, and a hit/miss counter for track confirmation and deletion. StrongSORT then replaces, one at a time, the re-ID network with a stronger one and the per-track feature bank with an exponential moving average of embeddings (association cost); the constant measurement noise with one scaled by detector confidence, $\tilde{R}_k = (1-c_k)R_k$ (sensor model: a learned quantity inside a classical filter); appearance-only matching with a weighted sum of appearance and kinematic cost (association cost); adds camera-motion compensation to the prediction (motion model); and replaces the matching cascade with a single global assignment (association solver). The mixed upgrades yielded a better performance when compared to DeepSORT, indicating that freely picking blocks not only works, but can increase performance. However, the paper also notes that the matching cascade increased performance in DeepSORT, but decreased it in StrongSORT, motivating the change. This illustrates that although one can pick blocks freely, the best option for one block may depend on the choices made for the others.
-
 \begin{table}[htbp]
 \centering\small
 \caption{The blocks from \autoref{fig:pipeline} decomposed into design choices. Options in different rows can in principle be combined, but some rows constrain others (e.g. the association decision determines which solvers apply, see \autoref{tab:solvers}), and some rows admit combinations (weighted association costs, IMM). The table includes examples of both classical and learned options for each block. Notice that data association has been decomposed (see \autoref{sec:anatomy-da}).}
@@ -174,19 +243,29 @@ Existence, birth, death & M-of-N, score thresholds, existence probability, Poiss
 \end{tabularx}
 \end{table}
 
-\subsubsection{Front-end: detections or raw data}
-The front end is what provides input to the tracking algorithm. Often, the front end is provided and not designed with a specific tracker in mind. The reason why we still include it in this overview is that choice of tracker should be done with your front-end in mind. Front-end also splits tracking into Track-before-detect and Tracking-by-detection. The latter is the classic framework introduced in \autoref{sec:formulation}, while the former uses no detector, but tracks based on the high dimensional raw measurement. A hybrid between this is extended object tracking, where each object may generate more than one detection. This further illustrates the importance of knowing your front-end when designing the tracker. It is also worth noting that a lot of modern detectors, e.g. image detectors, can provide more information than just position. An example is color and shape, which can be used to assist association.
-
 \subsubsection{Sensor model}
+\begin{itemize}
+    \item Keep the text below; remove the reference to the front-end (moved to the appendix; the scope sentence in the introduction covers it).
+    \item Replace the radar-occlusion example (moved to the appendix) with $\PD(x) = 0$ outside the satellite footprint and over land.
+    \item Link to the existence block: undetected targets build up in areas that have not been observed, which is what the Poisson intensity of undetected targets represents.
+    \item Addresses the rows ``missed detections'' and ``clutter'' of Table~\ref{tab:challenges}.
+\end{itemize}
+
 Following \autoref{sec:formulation}, we continue to use the Tracking-by-detection paradigm and move from front-end to the sensor model. This is natural, as we want our sensor model to reflect our front-end ``well enough'' for our tracker to make informed decisions. The idea is that if the tracker knows how measurements are likely generated, it will be better equipped to make good decisions regarding them. To achieve this, we need to model three things.
 \medskip
 
 Firstly, given a present target, how is a measurement generated? That is, we need a function that maps the state of an object to a measurement. This function, $\mathbf{z} = h(\mathbf{x})$, can be linear or non-linear. Secondly, we need the probability of a target generating a measurement; $P_D(\mathbf{x})$. This probability can vary based on the target's location and/or other parameters such as weather conditions. Finally, we need to model how clutter; $\mathbf{c}$ is generated. Clutter can be spatially and temporally varying in the same way as $P_D$.
 \medskip
 
-To illustrate the power of these techniques, we can imagine a front facing radar. $P_D$ can be adjusted to zero in the area behind other detected objects. This small modelling change allows target estimates to persist even though they are occluded for a long time. All because we told the tracker to not expect the occluded targets to generate measurements. 
-
 \subsubsection{Motion model and filter}
+\begin{itemize}
+    \item Keep the text below.
+    \item Constant velocity with continuous white-noise acceleration as the baseline; IMM for maneuvering targets.
+    \item Long-horizon vessel prediction: Ornstein--Uhlenbeck mean-reverting models (Millefiori et al.\ 2016) \TODO{verify and add to bib}.
+    \item One paragraph on learned prediction from AIS trajectories: directly relevant to long revisit times, since better prediction means smaller gates.
+    \item One sentence on geometry: the filter works in a local flat plane, and over large areas the curvature of the Earth enters (Chapter~\ref{sec:nvector}).
+\end{itemize}
+
 Contrary to the sensor model, the motion model and filter is usually the same as in standard filtering. This is because the standard Kalman filter equations appear in the Bayesian update step when white Gaussian noise and linear model assumptions are applied. This naturally motivates the usual extensions of the Kalman filter; the extended Kalman filter (EKF), unscented Kalman filter (UKF) or particle filtering.
 \medskip
 
@@ -199,76 +278,21 @@ Points to make:
     \item Remove very unlikely associations before combinatory is involved.
     \item Can be simple distance heuristics or complex probability based methods.
 \end{itemize}
+\begin{itemize}
+    \item Add: the gate grows with the predicted covariance, so with the revisit time. This is the link to Section~\ref{sec:complexity}.
+\end{itemize}
 
 \subsubsection{Data association}
 \label{sec:anatomy-da}
-Points to make:
 \begin{itemize}
-    \item What is decided: Hard (commit to one assignment), marginal/soft (weight measurements by association probabilities and keep one hypothesis), or deferred (keep several global hypotheses).
-    \item How is the cost of association for the optimization algorithm decided?
-    \item How is it solved: Approximately or exact (computational cost vs correctness)
-    \item Some trackers do not use such solvers. Some have implicit data association (PHD) and end to end deep learning algorithms also handle association implicitly.
+    \item The longest block paragraph. Present the association problem briefly here; the PMBM-specific cost matrix and Murty's method come in Section~\ref{sec:pmbm-da}.
+    \item The constraint from Section~\ref{sec:formulation}, and the association problem as an assignment problem over a cost matrix (one paragraph, no PMBM details).
+    \item What is decided: hard (commit to one assignment), marginal/soft (weight measurements by association probabilities and keep one hypothesis), or deferred (keep several global hypotheses).
+    \item How the cost is defined (kinematic likelihood, as in Section~\ref{sec:difficulties}), and how it is solved: exactly or approximately. Deferred decisions need $k$-best solvers.
+    \item Modularity example (replaces StrongSORT, moved to the appendix): the PDA lineage. PDAF $\rightarrow$ JPDA (Fortmann, Bar-Shalom \& Scheffe 1983, sonar) $\rightarrow$ IPDA (Mu\v{s}icki et al.\ 1994) $\rightarrow$ JIPDA (Mu\v{s}icki \& Evans 2004). Each step changes exactly one block: multi-target association, then existence \TODO{verify and add to bib}.
+    \item The solver table is dropped (moved to the appendix): the solver column of the family table (Section~\ref{sec:families}) and the complexity table (Section~\ref{sec:complexity}) cover it.
 \end{itemize}
 
-\begin{table}[htbp]
-\centering\small
-\caption{Association problems and their exact and approximate solvers.
-  \TODO{Verify complexity statements and add references.}}
-\label{tab:solvers}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.6cm} X}
-\toprule
-Problem (used by) & Exact & Approximate \\
-\midrule
-Best single assignment (GNN, SORT) & Hungarian, auction, JVC (polynomial) & Greedy matching \\
-$k$ best assignments (MHT, PMBM, $\delta$-GLMB) & Murty's algorithm (polynomial in $k$) & Gibbs sampling, randomised $k$-best \\
-Marginal association probabilities (JPDA, JIPDA, PMB, LMB) & Full enumeration (\#P-hard in general) & $k$-best truncation, loopy belief propagation (LBP), MCMC/Gibbs \\
-Multi-frame assignment (N-scan MHT, batch) & Integer programming (NP-hard for $\geq 3$ frames) & Lagrangian relaxation, network flow (special cost structure) \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\subsubsection{Hypothesis representation}
-\label{sec:anatomy-hyp}
-Points to make:
-\begin{itemize}
-    \item Only relevant when several hypotheses are kept.
-    \item When several hypotheses are kept, they can be stored in two ways. The distinction is mainly important for implementation.
-    \item In a hypothesis-oriented representation each global hypothesis carries its own complete set of tracks.
-    \item In a track-oriented representation each potential target keeps a tree of single-target hypotheses, and a global hypothesis is only a look-up of one leaf per target.
-    \item Explain how track-oriented storage works and why it scales better. And how it improves pruning as well.
-\end{itemize}
-
-\begin{figure}[htbp]
-\centering\small
-\begin{minipage}[t]{0.44\textwidth}\centering
-\textbf{Hypothesis-oriented}\par\medskip
-\begin{tabular}{l l}
-\toprule
-Global hyp. & Tracks (each stored in full) \\
-\midrule
-$H_1$ & $\tau_1^{a},\ \tau_2^{a}$ \\
-$H_2$ & $\tau_1^{b},\ \tau_2^{a}$ \\
-$H_3$ & $\tau_1^{a},\ \tau_2^{b},\ \tau_3^{a}$ \\
-\bottomrule
-\end{tabular}\par\medskip
-\textit{e.g.\ Reid's MHT, $\delta$-GLMB}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.52\textwidth}\centering
-\textbf{Track-oriented}\par\medskip
-\begin{tabular}{l l @{\qquad} l c c c}
-\toprule
-Target & Leaves & Global hyp. & $1$ & $2$ & $3$ \\
-\midrule
-$1$ & $\tau_1^{a},\tau_1^{b}$ & $H_1$ & $a$ & $a$ & -- \\
-$2$ & $\tau_2^{a},\tau_2^{b}$ & $H_2$ & $b$ & $a$ & -- \\
-$3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
-\bottomrule
-\end{tabular}\par\medskip
-\textit{e.g.\ track-oriented MHT, PMBM}
-\end{minipage}
-\caption{Two ways to store the same three global hypotheses. Left: each hypothesis holds full copies of its tracks. Right: single-target hypotheses are stored once per target, and global hypotheses are index tuples into them. \TODO{Optionally redraw as hypothesis trees.}}
-\label{fig:hyprep}
-\end{figure}
 
 \subsubsection{Existence: birth, death and undetected targets}
 \label{sec:anatomy-existence}
@@ -307,9 +331,16 @@ The exact multi-target posterior is a mixture over all association histories, an
 
 \begin{itemize}
     \item Maybe add the association growth table for $n$ targets and $m$ measurements.
-    \item Say something about clustering and that it is the only reduction that is exact given the gating, therefore it is useful in all tracking families. Something about breaking up clusters maybe as well. It is best utilized in sparse scenes.
+    \item Say something about clustering and that it is the only reduction that is exact given the gating, therefore it is useful in all tracking families. It is best utilized in sparse scenes. How clusters are merged and split belongs to Section~\ref{sec:pmbm-clustering}.
     \item Explain that the amount of approximation is a tradeoff between cost and accuracy.
 \end{itemize}
+\begin{itemize}
+    \item Clustering is exact given the gates; cite Reid 1979 and Kurien 1990 \TODO{add to bib}.
+    \item The chain that motivates this work: revisit time $\rightarrow$ predicted covariance (position variance grows as $\sigma_v^2 T^2 + q T^3/3$) $\rightarrow$ gate radius compared with vessel spacing $\rightarrow$ cluster size $\rightarrow$ cost of association (Murty: about $k \cdot n^3$ per prior hypothesis).
+    \item Give the numbers with this project's parameters: a new track's gate radius is 1.8 / 5.5 / 15.8~km after 60 / 300 / 900~s (5~m/s velocity prior, $q = 0.1^2$~m$^2$/s$^3$). At satellite revisit times it reaches the 100~km scale.
+    \item Hand-off: the families in Section~\ref{sec:families} differ mainly in where they stop on the funnel.
+\end{itemize}
+
 
 
 \begin{figure}[htbp]
@@ -358,89 +389,57 @@ Monte Carlo / mixtures & Density representation & \xmark & Particle filters, SMC
 \end{tabularx}
 \end{table}
 
-
 % =====================================================================
-\subsection{Multiple sensors}
-\label{sec:multisensor}
-
+\subsection{Association families and two traditions}
+\label{sec:families}
 \begin{itemize}
-    \item Highlight that this is an issue that cut across blocks and families.
-    \item The correct way to handle multiple sensors depends on a lot of factors; (the sensors, assumptions about independence, order and temporal difference between measurements, how much computation one can afford).
-\end{itemize}
-
-\paragraph{What changes for each sensor.} Every sensor $s$ comes with its own sensor model: a measurement function $h_s$, noise covariance $R_s$, detection probability $\PD^{s}$ and clutter model (Section~\ref{sec:anatomy}). The tracker must apply the right model to each measurement, since sensors differ in dimension, accuracy and false-alarm behaviour. Two practical requirements follow. Measurements must be expressed in a common frame, which requires the sensors to be registered to each other \TODO{cite}. Sensors also rarely report at the same time, so the motion model must support arbitrary time steps, and measurements that arrive late must be handled \TODO{cite out-of-sequence measurement handling}.
-
-\paragraph{Where the sensors are combined.} Three architectures cover most of the literature (\autoref{tab:multisensor}). The choice is about which association problem has to be solved, so it ties back to the solvers in \autoref{tab:solvers}.
-
-\begin{table}[htbp]
-\centering\small
-\caption{Where sensors can be combined.
-  \TODO{Verify the statements and add references.}}
-\label{tab:multisensor}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{3.8cm} X X}
-\toprule
-Architecture & Association problem & Strength & Weakness \\
-\midrule
-Centralised, sequential
-  & One single-sensor problem per scan, solved in turn
-  & Same cost as a single sensor; handles asynchronous scans naturally
-  & Truncation after one sensor (pruning, marginalisation) can discard hypotheses a later sensor would have supported, so the result depends on the order \\ \addlinespace
-Centralised, joint
-  & One multi-dimensional assignment over simultaneous scans (NP-hard for three or more sensors)
-  & Keeps all cross-sensor evidence
-  & Cost grows quickly with the number of sensors; needs simultaneous scans or approximations (e.g.\ Gibbs sampling) \\ \addlinespace
-Distributed (track-level)
-  & Track-to-track association, then fusion of local tracks
-  & Low bandwidth; modular; local trackers may differ
-  & Discards measurement-level information; local tracks have correlated errors, so naive fusion is overconfident (covariance intersection is one remedy) \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\paragraph{Relation to the families.} The architecture can in principle be chosen independently of the family. Any recursive tracker can process sensor scans sequentially, because each scan is just another set of measurements with its own sensor model. In the exact Bayes recursion, sequential and joint updates agree when the sensors are conditionally independent given the targets. The family matters through cost and through how much a truncation between sensors can lose, which is why \autoref{fig:taxonomy} treats multi-sensor handling as orthogonal to the families. For PHD-type filters the sequential update is itself an approximation that depends on the order of the sensors \TODO{cite iterated-corrector PHD/CPHD}. Multi-sensor extensions of the multi-hypothesis filters exist \TODO{cite, e.g.\ multi-sensor GLMB}.
-
-% =====================================================================
-\subsection{A map of the field}
-\label{sec:map}
-
-\begin{itemize}
-    \item Make the scope explicit; This is a map of the field concerning probabilistic recursive trackers.
-    \item Highlight that the distinction between RFS theory and classical approaches is mainly due to the mathematical framework that was used to develop them and that the differences between the named methods in literature can be small. The differences are usually much larger along the rows in \autoref{fig:taxonomy}. \TODO{Cite the papers that make these links explicit (Williams on PMB vs.\ JIPDA; Garc\'ia-Fern\'andez et al.\ on PMBM vs.\ $\delta$-GLMB).}
-    \item Highlight that the named methods in literature sometimes are labeled as TO or HO because that was how they were developed, but that this is due to history and not limitations in the algorithm formulations.
+    \item One family table, built from the table below: decision, solver, existence, representative methods from both traditions in the same cell. Drop the RFS column. Useful cells from the family cards and the comparison table (both in the appendix) go into it.
+    \item Place each family on the funnel of Figure~\ref{fig:funnel}: hard (GNN) stops at one hypothesis, soft (JPDA, JIPDA, PMB, LMB) marginalizes every scan, deferred (MHT, PMBM, $\delta$-GLMB) stops at pruning. PHD as a short note.
+    \item Keep GNN, JIPDA and MHT as the alternatives that were rejected, so the choice of PMBM is not arbitrary.
+    \item Hypothesis-oriented versus track-oriented: the same posterior if represented exactly, but different as approximations, because they differ in what is propagated, how new hypotheses are generated and what pruning acts on.
+    \begin{itemize}
+        \item HOMHT (Reid) propagates global hypotheses and expands each parent (Cox \& Hingorani: Murty per parent). A pruned global hypothesis never returns.
+        \item Classic TOMHT propagates track trees and re-forms global hypotheses each scan, often by multi-frame assignment (Blackman 2004). Pruning acts on tracks (scores, N-scan).
+        \item PMBM in practice is a hybrid: track-oriented storage, hypothesis-oriented generation (Section~\ref{sec:pmbm-representation}).
+        \item PMBM versus $\delta$-GLMB is not a HO/TO difference: Poisson versus labelled multi-Bernoulli birth, an explicit model of undetected targets, labels.
+    \end{itemize}
+    \item Two traditions that converge (a small timeline figure): the track-based line (Reid 1979, Bar-Shalom, Kurien 1990, Blackman 2004, JIPDA) and the RFS line (Mahler's PHD 2003, CB-MeMBer, Vo \& Vo 2013, PMBM). Convergence: Williams 2015, Brekke \& Chitre 2018, Garc\'ia-Fern\'andez et al.\ 2018. Equivalence holds under specific assumptions, not in general.
+    \item What the RFS line contributed that this work uses: the Poisson intensity of undetected targets, recycling based on it, principled birth, and GOSPA.
+    \item \TODO{Verify all references above and add them to the bib.}
+    \item The figure below (moved from Chapter~\ref{sec:pmbm}) illustrates HO versus TO storage.
 \end{itemize}
 
 \begin{figure}[htbp]
 \centering\small
-\renewcommand{\arraystretch}{1.35}
-\begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.6cm}}
+\begin{minipage}[t]{0.44\textwidth}\centering
+\textbf{Hypothesis-oriented}\par\medskip
+\begin{tabular}{l l}
 \toprule
-Association hypotheses kept & Vector-based (classical) & Set-based (RFS) \\
+Global hyp. & Tracks (each stored in full) \\
 \midrule
-\cellcolor{famIMP!30}None (association marginalised inside the update)
-  & \cellcolor{famIMP!12}--
-  & \cellcolor{famIMP!12}PHD, CPHD (no identities) \\
-\cellcolor{famSH!30}One, hard
-  & \cellcolor{famSH!12}GNN; SORT, DeepSORT, ByteTrack
-  & \cellcolor{famSH!12}\emph{rare} (e.g.\ GNN-PMB) \\
-\cellcolor{famSM!30}One, marginalised (soft)
-  & \cellcolor{famSM!12}PDA, JPDA, IPDA, JIPDA
-  & \cellcolor{famSM!12}PMB, LMB, MeMBer \\
-\cellcolor{famMH!30}Many, hypothesis-oriented
-  & \cellcolor{famMH!12}Reid's MHT (HOMHT)
-  & \cellcolor{famMH!12}$\delta$-GLMB \\
-\cellcolor{famMH!30}Many, track-oriented
-  & \cellcolor{famMH!12}Track-oriented MHT (TOMHT)
-  & \cellcolor{famMH!12}PMBM \\
-\midrule
-\multicolumn{3}{p{11.8cm}}{\emph{Orthogonal to every cell:} front-end (detections or raw data), learned components, multi-sensor architecture (Sec.~\ref{sec:multisensor}).} \\
-\multicolumn{3}{p{11.8cm}}{\emph{Outside the grid:} methods that fuse or replace blocks (Sec.~\ref{sec:outside}, colour \textcolor{famOUT}{\textbf{purple}}).} \\
+$H_1$ & $\tau_1^{a},\ \tau_2^{a}$ \\
+$H_2$ & $\tau_1^{b},\ \tau_2^{a}$ \\
+$H_3$ & $\tau_1^{a},\ \tau_2^{b},\ \tau_3^{a}$ \\
 \bottomrule
-\end{tabular}
-\caption{Map of detection-based MTT. Rows (families) are the association decision; fidelity and cost increase downwards. Columns are the modelling framework. Methods in the same row share their association structure. \TODO{Verify GNN-PMB and the MeMBer placement.}}
-\label{fig:taxonomy}
+\end{tabular}\par\medskip
+\textit{e.g.\ Reid's MHT, $\delta$-GLMB}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.52\textwidth}\centering
+\textbf{Track-oriented}\par\medskip
+\begin{tabular}{l l @{\qquad} l c c c}
+\toprule
+Target & Leaves & Global hyp. & $1$ & $2$ & $3$ \\
+\midrule
+$1$ & $\tau_1^{a},\tau_1^{b}$ & $H_1$ & $a$ & $a$ & -- \\
+$2$ & $\tau_2^{a},\tau_2^{b}$ & $H_2$ & $b$ & $a$ & -- \\
+$3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
+\bottomrule
+\end{tabular}\par\medskip
+\textit{e.g.\ track-oriented MHT, PMBM}
+\end{minipage}
+\caption{Two ways to store the same three global hypotheses. Left: each hypothesis holds full copies of its tracks. Right: single-target hypotheses are stored once per target, and global hypotheses are index tuples into them.}
+\label{fig:hyprep}
 \end{figure}
-
-Table~\ref{tab:recipes} makes the building-block view explicit by listing the choices each named method makes. Front-end, motion model and filter are omitted because every method accepts any choice there.
 
 \begin{table}[htbp]
 \centering\footnotesize
@@ -467,156 +466,18 @@ Method & Decision & Solver & Storage & Existence & RFS \\
 \end{table}
 
 % =====================================================================
-\subsection{The families in detail}
-\label{sec:families}
-
-Each family follows the same template so that the reader can scan across
-them: idea, recipe, assumptions, limits, typical use. Vector-based and
-RFS-based members of a family are described together.
-
-\familycard{famSH}{One hard hypothesis (GNN, SORT-family)}
-% IDEA
- {Commit to the single best global assignment each scan. Analog to MAP estimation in the sense that we only care about the most probable explanation.} 
-% RECIPIE
- {Hungarian/auction; heuristic existence. SORT-family = same recipe with learned detector and (DeepSORT) learned re-ID cost.}
-% ASSUMES
- {Well-separated targets, low clutter, or strong appearance cues.}
-% LIMITS
- {Irreversible errors under ambiguity; track swaps at crossings.}
-% TYPICAL USE
- {Low-cost real-time systems; video tracking-by-detection.}
-
-\familycard{famSM}{One marginalised hypothesis (JPDA, JIPDA, PMB, LMB)}
- {Weight all feasible associations, then collapse to one hypothesis per scan. Analog to MMSE in the sense that we consider all feasible associations and weigh them by how probable they are. The updated state is then a weighed sum of updates, collapsing the state back to the same size as the prior.}
- {Approximate marginals (enumeration, LBP, $k$-best); existence probability (JIPDA, PMB, LMB) or external logic (JPDA).}
- {Moderate clutter; ambiguity resolves within one scan.}
- {Track coalescence for closely spaced targets; information lost by marginalizing.}
- {Cluttered scenes with moderate compute budget.}
-
-\familycard{famMH}{Many hypotheses (MHT, PMBM, $\delta$-GLMB)}
- {Keep competing global hypotheses and defer decisions until later data resolves them. We accept that not all ambiguity can be resolved until more evidence has arrived. Therefore, keep the N best hypotheses and update these as new measurements arrive.}
- {Murty or Gibbs; pruning, capping, N-scan; track-oriented (TOMHT, PMBM) or hypothesis-oriented (HOMHT, $\delta$-GLMB) storage.}
- {Enough compute; reduction parameters tuned to the scenario.}
- {Exponential growth held back only by approximations; tuning-sensitive.}
- {Ambiguous, cluttered scenes; crossing targets.}
-
-\familycard{famIMP}{Implicit association (PHD, CPHD)}
- {Propagate only the first moment (and cardinality for CPHD) of the multi-target density; association is summed out inside the update.}
- {No association solver; Gaussian-mixture or particle implementation; birth intensity.}
- {Poisson-type models; identities not required.}
- {No track identities without extra labelling; poor for close targets; ``spooky effect'' in CPHD.}
- {Many targets, estimating counts and densities rather than tracks.}
-
-So far every method fits the pipeline of Fig.~\ref{fig:pipeline}. The
-next subsection covers those that do not.
-
-% =====================================================================
-\subsection{Methods outside the pipeline}
-\label{sec:outside}
-
-Some methods do not fill the slots of Fig.~\ref{fig:pipeline} one by one. They are still described with the same vocabulary, by stating which blocks they \emph{fuse} into one operation and which they \emph{replace} (Fig.~\ref{fig:rewired}). This keeps them on the same map: each strip shows what is gained and what modularity is lost.
-
-\begin{figure}[htbp]
-\centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[
-  blk/.style={draw, rounded corners=2pt, minimum height=0.7cm, font=\scriptsize,
-              align=center, fill=white, inner sep=1pt},
-  rl/.style={font=\scriptsize, anchor=east, align=right, text width=3.0cm}]
-% header
-\foreach \i/\t in {0/Front-end, 1/Prediction, 2/Gating, 3/Association, 4/Update, 5/Existence}
-  {\node[font=\scriptsize\bfseries] at (\i*1.9, 0.6) {\t};}
-% standard
-\node[rl] at (-1.1,0) {Standard pipeline};
-\foreach \i/\t in {0/Detector,1/Motion,2/Gate,3/Assign,4/Filter,5/Logic}{\mttblk{\i}{\i}{0}{\t}{}}
-% PHD
-\node[rl] at (-1.1,-0.9) {\textcolor{famIMP}{PHD / CPHD}};
-\foreach \i/\t in {0/Detector,1/Motion,2/Gate}{\mttblk{\i}{\i}{-0.9}{\t}{}}
-\mttblk{3}{5}{-0.9}{Single intensity recursion (association summed out)}{fill=famIMP!20}
-% TBD
-\node[rl] at (-1.1,-1.8) {\textcolor{famOUT}{Track-before-detect}};
-\mttblk{0}{0}{-1.8}{Raw data}{fill=famOUT!20}
-\mttblk{1}{1}{-1.8}{Motion}{}
-\mttblk{2}{4}{-1.8}{Evidence integrated over time (no thresholding)}{fill=famOUT!20}
-\mttblk{5}{5}{-1.8}{Threshold}{}
-% R-RANSAC
-\node[rl] at (-1.1,-2.7) {\textcolor{famOUT}{R-RANSAC}};
-\foreach \i/\t in {0/Detector,1/Motion,2/Gate,3/Assign,4/Filter}{\mttblk{\i}{\i}{-2.7}{\t}{}}
-\mttblk{5}{5}{-2.7}{Window\\RANSAC}{fill=famOUT!20}
-% batch / network flow
-\node[rl] at (-1.1,-3.6) {\textcolor{famOUT}{Batch / network flow}};
-\mttblk{0}{0}{-3.6}{Detector}{}
-\mttblk{1}{5}{-3.6}{Joint optimisation over a time window (all associations and track starts/ends at once)}{fill=famOUT!20}
-% end-to-end
-\node[rl] at (-1.1,-4.5) {\textcolor{famOUT}{End-to-end transformer}};
-\mttblk{0}{5}{-4.5}{Learned network: detection, association and track management as track queries}{fill=accLRN!20}
-\end{tikzpicture}}
-\caption{Methods described by the blocks they fuse (wide boxes) or replace (shaded boxes). White boxes are standard blocks. \TODO{Check correctness}}
-\label{fig:rewired}
-\end{figure}
-
-\paragraph{\textcolor{famOUT}{Track-before-detect.}}
-Fuses detection, association and update by integrating raw sensor evidence over time. Gains: low-SNR targets. Costs: heavy computation, sensor-specific. Dynamic programming, particle and RFS-based (Bernoulli) variants.
-\paragraph{\textcolor{famOUT}{Recursive RANSAC.}}
-Replaces probabilistic initiation with hypothesise-and-test over a measurement window; otherwise a bank of filters with heuristic association. Mostly a different existence block.
-\paragraph{\textcolor{famOUT}{Batch and network-flow methods.}}
-Solve association over a whole window jointly (min-cost flow, multi-frame assignment). Related to N-scan MHT; offline or with latency.
-\paragraph{\textcolor{famOUT}{End-to-end learned trackers.}}
-TrackFormer, MOTR: track queries carry identity across frames, so association and existence are learned jointly. Gains: no hand-tuned association. Costs: no explicit uncertainty, large training sets, domain shift. Contrast with Table~\ref{tab:designspace}, where learning replaces a single block.
-
-With all methods placed on the same vocabulary, they can be compared on common criteria.
-
-% =====================================================================
-\subsection{Comparison and design guide}
-\label{sec:selection}
-
-The families are compared on what each method assumes and what it outputs (\autoref{tab:compare}). Failure modes are described under \emph{Limits} in Section~\ref{sec:families}, and cost follows from where a family stops on the approximation ladder (Section~\ref{sec:complexity}).
-
-\begin{table}[htbp]
-\centering\small
-\caption{Assumptions and outputs by method. \TODO{Verify each cell against the cited sources.}}
-\label{tab:compare}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.0cm} p{2.3cm} c p{2.6cm} X p{2.0cm}}
-\toprule
-Method & Target count & Identity & Cost & Key requirements & Multi-sensor \\
-\midrule
-\rowcolor{famSH!15}  GNN, SORT-family & external logic & \cmark & polynomial & separated targets or appearance cues & sequential \\
-\rowcolor{famSM!15}  JPDA, JIPDA & logic / existence & \cmark & exponential (approx.\ exist) & moderate clutter & sequential \\
-\rowcolor{famSM!15}  PMB, LMB  & estimated & \cmark & moderate & known $\PD$, clutter rate & sequential \\
-\rowcolor{famMH!15}  MHT       & hypothesis-level & \cmark & exponential, pruned & pruning parameters & centralized \\
-\rowcolor{famMH!15}  PMBM, $\delta$-GLMB & estimated & \cmark & moderate--high & known $\PD$, clutter rate, birth model & centralized \\
-\rowcolor{famIMP!15} PHD/CPHD  & estimated & \xmark & low--moderate & Poisson-type models & approximate \\
-\rowcolor{famOUT!15} TBD       & implicit & varies & high & raw data & sensor-specific \\
-\rowcolor{famOUT!15} End-to-end & learned & \cmark & GPU inference & training data & mostly single \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-No family dominates: the best choice depends on clutter, target dynamics and available compute. Because the blocks are independent, the choice is best made block by block, which \autoref{tab:selection} does with one question per block.
-
-\begin{table}[htbp]
-\centering\small
-\caption{Design guide, one question per building block.
-  \TODO{Adjust after finalizing the comparison; optionally condense into a flowchart.}}
-\label{tab:selection}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.3cm} X X}
-\toprule
-Block & Question & If yes, lean towards \\
-\midrule
-Front-end   & Very low SNR, and raw data available? & Track-before-detect \\
-Motion model & Maneuvering targets? Training data for unusual dynamics? & IMM; learned motion model \\
-Association cost & Rich appearance cues (e.g.\ EO video)? & Add learned re-ID affinity to the kinematic cost \\
-Association decision & Frequent ambiguity (crossings, close spacing, clutter)? & Deferred (MHT, PMBM); otherwise marginal (JIPDA, PMB) or hard (GNN) \\
-Representation & Many hypotheses with long shared histories? & Track-oriented (TOMHT, PMBM) \\
-Existence   & Frequent births/deaths, long detection gaps, undetected targets? & Probabilistic existence, Poisson undetected model \\
-Complexity  & Hard real-time budget? & Gating and clustering always; then capping, small $k$, or marginalization \\
-Multi-sensor & Heterogeneous or distributed sensors? & Centralized if bandwidth allows, else track-to-track fusion \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\paragraph{Implications for this project.}
-Walk through Table~\ref{tab:selection} for your own setting: heterogeneous sensors, sparse and slow-moving targets, sea-return clutter, ground truth from AIS. State the resulting recipe (one choice per block) and which options are ruled out, and why.
-
-\paragraph{Summary.}
-Two or three sentences: a tracker is a recipe of interchangeable blocks; families differ in how many association hypotheses they keep, which is largely a complexity decision; RFS is a modelling framework that mainly improves the existence block; and what your project takes from this.
+\subsection{Back to the problem: the choice for this work}
+\label{sec:mtt-choice}
+\begin{itemize}
+    \item One row per block (a table): the choice made in this work and why, given the setting in Section~\ref{sec:scope}.
+    \begin{itemize}
+        \item Sensor model: constant $\PD$ and clutter density in this project; $\PD(x)$ with footprints in the thesis.
+        \item Motion model and filter: constant velocity, Kalman filter in local North-East planes (n-vector, Chapter~\ref{sec:nvector}).
+        \item Gating: Mahalanobis.
+        \item Association: deferred, $k$-best with Murty's method.
+        \item Existence: Bernoulli existence probabilities and a Poisson intensity of undetected targets, with recycling.
+        \item Complexity: gating, clustering, capping, recycling.
+    \end{itemize}
+    \item The result is the PMBM filter (Chapter~\ref{sec:pmbm}).
+    \item Open problem: complexity at long revisit times (Section~\ref{sec:complexity}), the thread through the results and the thesis.
+\end{itemize}

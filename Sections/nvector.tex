@@ -1,0 +1,121 @@
+\section{Tracking on a sphere}
+\label{sec:nvector}
+\begin{itemize}
+    \item Rule for this chapter: theory only. The n-vector formulation of \cite{b_gade_2024} as the paper states it, with the missing rotation of velocity and covariance added (Section~\ref{sec:nvector-transport}).
+    \item How it is implemented (an equivalent direct form with an anchor per Gaussian) and how it is wired into the PMBM is in Chapter~\ref{sec:implementation}.
+    \item Opening: why geometry matters for wide areas and long revisits, and the link to RQ2 (Section~\ref{sec:rq}).
+\end{itemize}
+
+\subsection{N-vector as a position representation}
+When tracking objects on earth over large distances, we require some way of representing global position. One of the most popular representations is latitude/longitude. However, this representation suffers from singularities at the poles and is discontinuous at the Date line. An alternative representation is N-vector \parencite{k_gade_2010}. It is defined as a 3D unit normal vector to the surface of earth and is expressed in an earth fixed coordinate frame $E$. Further descriptions will therefore use $n^E$ to denote n-vectors in coordinate frame $E$. N-vectors does not suffer from discontinuities or singularities, and many problems can be solved by simple vector algebra \parencite{k_gade_2010}. 
+\begin{itemize}
+    \item The operations used in the rest of the chapter: the angle between two n-vectors (the $\operatorname{atan2}$ form, accurate for small angles), the local North-East frame at a point, and the conversions between n-vectors and local North-East offsets (the examples in \cite{ffi_nvector}).
+    \item Spherical Earth with mean radius $r = 6371$~km; the ellipsoid changes distances by about 0.3\,\%, ignored as in \cite{b_gade_2024}.
+\end{itemize}
+
+\subsection{Tracking using N-vector}
+\label{sec:tracking_n_vector}
+One of the issues of tracking moving vessels over large geographical areas is error introduced by the curvature of the earth. One might think that such errors are way too small to be worth compensating for, but consider a case with a fast moving vessel and infrequent measurements. A satellite based measurement might only arrive every 1.5 hours and a fast moving vessel can cover 50 to 80 kilometers during that time. DEFINE THE AMOUNT OF ERROR. A tempting approach is therefore to do the Chapman - Kolmogorov prediction along the earths' curvature, and only use flat earth approximations for the local Bayes update. The following description of a prediction and Kalman update using N-vector formulation is outlined in \parencite{b_gade_2024}, so this is merely a presentation of that work. I will now present a single step of the estimation cycle using a single measurement. It is worth noting that there is a sign convention difference between the algorithm presented in \parencite{b_gade_2024} and what will be presented here. This is due to the way the error state is defined, but it makes no difference in the actual implementation.
+\begin{itemize}
+    \item Replace ``DEFINE THE AMOUNT OF ERROR'' with a pointer to Section~\ref{sec:nvector-error}.
+    \item Present the paper's formulation in one consistent version. Where the paper is ambiguous or inconsistent, add a short note or footnote:
+    \begin{itemize}
+        \item the frame the velocity correction is expressed in (the paper says the frame at $n_{k+1|k}$; it is the frame at $n_{k|k-1}$);
+        \item the sign of the correction (the innovation and the error-state gain use opposite conventions);
+        \item the step 4 re-expression of the velocity, which the paper does not specify, and the covariance, which it does not re-express (Section~\ref{sec:nvector-transport}).
+    \end{itemize}
+\end{itemize}
+
+\medskip
+
+\textbf{Step 0: The prior} \\
+From the last estimation cycle we have predicted position $n^E_{k \vert k-1}$ as an N-vector. A measurement $n^E_{k, meas}$ is received. The measurement is expressed in the same global N-vector frame as the predicted position.
+
+\textbf{Step 1: The innovation} \\
+The measurement and predicted position is assumed close enough so that their difference can be expressed in the local East - North frame centered around the predicted position $n^E_{k \vert k-1}$. This can trivially be achieved by following the steps in Example 1 at \parencite{ffi_nvector}. We denote this local East - North innovation by $\epsilon^N_k$
+
+\textbf{Step 2: Local Kalman update} \\
+Using the 2D innovation $\epsilon^N_k$ we can do a standard Kalman filter update calculation. The resulting states, $\widehat{\delta p}_{k \vert k-1}$ and $\widehat{\delta v}_{k \vert k-1}$, can be thought of as the estimated error in position and velocity. For completeness the equations will be stated explicitly. 
+
+\begin{align}
+S_k &= H P_{k|k-1} H^T + R^N_k, \\[4pt]
+K_k &= P_{k|k-1} H^T S_k^{-1}, \\[4pt]
+\begin{bmatrix}
+\widehat{\delta p}_{k|k-1} \\
+\widehat{\delta v}_{k|k-1}
+\end{bmatrix}
+&= K_k\, \epsilon^N_k, \\[4pt]
+P_{k|k} &= (I - K_k H)\, P_{k|k-1}.
+\end{align}
+
+Two things worth noting; for a positional measurement, as we have in this example, we simply use $H = [I \: 0]$. Also, the measurement covariance matrix $R^N_k$ should be defined in the local East - North frame, the same as $\epsilon^N_k$.
+
+\textbf{Step 3: injection} \\
+Using the error estimates $\widehat{\delta p}_{k \vert k-1}$ and $\widehat{\delta v}_{k \vert k-1}$, we can now update the predicted states $n^E_{k \vert k-1}$ and $v^N_{k \vert k-1}$. Injection of the velocity is straightforward while the corrected position is obtained by following Example 2 in \parencite{ffi_nvector}. This operation is denoted by the function $g$.
+
+\begin{align}
+    v^N_{k \vert k} &= v^N_{k \vert k-1} + \widehat{\delta v}_{k \vert k-1} \\
+    n^E_{k \vert k} &= g(n^E_{k \vert k-1}, \widehat{\delta p}_{k \vert k-1})
+\end{align}
+
+\textbf{Step 4: Great circle prediction} \\
+Prediction is done using a constant velocity model along the curvature of the earth. The predicted N-vector is given by \autoref{eq:great_circle_prediction} while the velocity is unchanged. However, we still need to reexpress the velocity in the local East - North frame of the new predicted point $n^E_{k+1 \vert k}$.
+
+\begin{equation}
+    n^{E}_{k+1|k} = n^{E}_{k|k} \cdot \cos \left( \frac{\lvert v_{k|k}\rvert \cdot \Delta t}{r} \right)
+ +
+\operatorname{unit}\!\left(v^{E}_{k|k}\right) \cdot \sin\left( \frac{\lvert v_{k|k}\rvert \cdot \Delta t}{r} \right)
+\label{eq:great_circle_prediction}
+\end{equation}
+\begin{equation*}
+    v^N_{k+1 \vert k} = v^N_{k \vert k} \: (\text{re-expressed in the new N-frame, centered at } n^E_{k+1 \vert k})
+\end{equation*}
+
+Note that $\lvert v_{k|k}\rvert$ is independent of frame. This is because the length of the vector, the absolute velocity, is independent of frame. $r$ is the mean radius of the Earth.
+\medskip
+
+The covariance $P_{k+1 \vert k}$ is also predicted. This is done by the standard Kalman filter prediction with the standard constant velocity matrix $F$.
+
+\begin{equation}
+    P_{k+1 \vert k} = F P_{k \vert k} F^T + Q^N , \quad 
+    F = \begin{bmatrix}
+        I & \Delta t I \\
+        0 & I 
+    \end{bmatrix}
+\end{equation}
+
+The convoluted position prediction alongside the simple covariance prediction might look dubious at first glance, but the underlying constant velocity model is the same. It is just mapped to the great circle approximation of the earth in the position. The covariance is still defined in the 2D plane locally.
+
+\textbf{Step 5: Repeat} \\
+Use the predicted position and velocity, $n^{E}_{k+1|k}$ and $v^N_{k+1 \vert k}$, as inputs to the next estimation cycle when a new measurement is received.
+% =====================================================================
+\subsection{Re-expressing velocity and covariance along the great circle}
+\label{sec:nvector-transport}
+\begin{itemize}
+    \item The addition to \cite{b_gade_2024}: it completes step 4.
+    \item The local North-East frame turns as it moves along the great circle. Its North axis rotates by $\Delta\psi \approx (s/r)\tan(\text{lat})\sin(\text{az})$ after a distance $s$ (3.9$^\circ$ after 250~km at 60$^\circ$\,N).
+    \item The velocity and the covariance must therefore be rotated by $\Delta\psi$ whenever the position moves to a new frame: $v \leftarrow T v$ and $P \leftarrow T P T^{\mathsf{T}}$, with $T$ the rotation acting on the position and velocity blocks.
+    \item Without the rotation, keeping the North and East components fixed gives a constant-heading path: 17~km off the great circle after 360~km at 60$^\circ$\,N, and 3.4\,\% / 6.9\,\% error in $P$ after 100 / 200~km.
+    \item Great circle versus rhumb line: vessels on autopilot hold a compass heading, which is closer to a rhumb line. State the choice made here (great circle, as the paper) and leave the decision on AIS data to the thesis.
+    \item The verification (against the nvector library and a Monte Carlo through the exact spherical map) belongs in Chapter~\ref{sec:implementation} or the results.
+\end{itemize}
+
+% =====================================================================
+\subsection{Gating using N-vector}
+Gating is important.
+\begin{itemize}
+    \item The gating of \cite[Sec.~III]{b_gade_2024}: the Mahalanobis test in the local frame of the predicted position (paper eq.~16), preceded by a cheap ``clearly outside'' test on the angle between n-vectors against the largest possible gate radius (eq.~15 and the flowchart).
+    \item Use the $\operatorname{atan2}$ form for angles: $\cos^{-1}$ loses accuracy for small angles, and eq.~12 compares a chord with an arc.
+    \item The paper's cluster borders (III.B--C) and measurement-to-measurement gate (III.D): describe briefly. Why they are not needed in this PMBM is an implementation matter (Chapter~\ref{sec:implementation}).
+\end{itemize}
+
+% =====================================================================
+\subsection{How large is the curvature error?}
+\label{sec:nvector-error}
+\begin{itemize}
+    \item Analytic statement, no experiment: compare a single flat plane at the region centre with the great circle.
+    \item Constant velocity in one plane versus the great circle: at most 2~m after 36~km of travel within 100~km of the plane centre, 14~m at 300~km from it, and about 100~m after 360~km of travel at 100~km from it.
+    \item The paper's ``$\approx$\,5~km'' (Fig.~9) is a straight line in 3-D ECEF: almost all of it is height above the surface (0.13~km horizontal after 250~km).
+    \item Consequence: no measurable gain is expected at the scale of this project (radius up to 100~km, revisits up to 900~s); a gain needs hundreds of km of travel between updates or long gaps. This is the expectation that the results test (RQ2).
+    \item The error-budget figure itself goes in the results.
+\end{itemize}

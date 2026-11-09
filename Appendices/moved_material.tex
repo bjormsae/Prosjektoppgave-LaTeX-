@@ -1,0 +1,589 @@
+% Temporary appendix, created during the restructure of 2026-11-09.
+% Everything here was moved out of Chapters 2-3 verbatim (headings demoted
+% one level). Condense or delete before hand-in.
+\subsection{Material to condense into Chapter 2}
+\label{app:condense}
+Moved from the background chapter. Condense into Section~\ref{sec:formulation} (clutter, misdetection and measurement model) and Section~\ref{sec:difficulties} (the single-target result as the worked example).
+
+\subsubsection{Modeling clutter}
+Clutter are detections that originate from sources that is not a target we want to track. Clutter is assumed to be random and originate from noise in the detector. Consider a sensor with a field of view in $R^n$ of volume $V$. Let $\lambda$ denote the expected number of clutter detections per unit volume. It is then clear that the expected number of clutter measurements in the sensors FOV is $ \mathbb{E}[\vert C_k \vert] = \lambda V $. 
+\medskip
+
+By discretizing the sensor and letting the resolution tend to infinity, we can argue that $\vert C_k \vert$ is Poisson distributed and that $C_k$ is a Poisson point process (PPP). 
+
+\begin{definition}{Poisson point process clutter model}
+\textbf{Clutter} $C_k$ is a random set / random matrix of a random number of random vectors. $C_k$ is defined such that:
+\begin{itemize}
+    \item $C_k = [c^1_k, c^2_k, \ldots , c^{m_k}_k]$
+    \item $m_k \sim \text{Po}(\lambda V) $
+    \item Given $m_k$, the vectors $c^1_k, c^2_k, \ldots , c^{m_k}_k$ are i.i.d. where $c_k^j \sim \text{Uniform}(V)$ and $V$ is the sensor FOV.
+    \item The PPP can be parameterized by a spatial intensity function $\lambda(x) \geq 0$, where the rate is $\bar{\lambda} = \int \lambda(x) \: dx$
+    \item A spatial pdf can be obtained as $f_c(x) = \frac{\lambda(x)}{\bar{\lambda}}$
+    \item The pdf of the PPP is then 
+    \[
+    p(C_k) = p(C_k, m_k) = p(m_k) \, p(C_k \vert m_k) = \text{Po}(m_k; \bar{\lambda}) \prod_{i=1}^{m_k} f_c(c^i_k) = \frac{\exp(-\bar{\lambda})}{m_k!} \prod_{i=1}^{m_k} \lambda(c_k^i)
+    \]
+\end{itemize}
+\end{definition}
+
+\subsubsection{Modeling misdetections}
+Objects we are trying to detect may or may not be detected at each timestep. In the single target case, we assume that a target is always present and that the target is detected with a probability $P^D(x_k)$. $O_k$ is a variable that contains the possibility that the target is either not detected or detected and generates a measurement from the measurement model $h(o_k \vert x_k)$. This can be summed up in the following way.
+
+\begin{definition}{Misdetection model}
+Given $x_k$, the det of vectors in $O_k$ is a Bernoulli random finite set distributed according to:
+\begin{equation}
+    p(O_k \vert x_k) = 
+    \begin{cases}
+        1 - P^D(x_k) & \text{if } O_k = [] \\
+        P^D(x_k) \: h(o_k \vert x_k) & \text{if } O_k = o_k
+    \end{cases}
+\end{equation}
+\end{definition}
+
+We will later see that we need $P^D(x_k)$ to be constant in order to simplify the filtering greatly.
+
+\subsubsection{Measurement model}
+With the clutter model and detection model at hand we can define the measurement model for single target tracking. 
+
+\begin{definition}{Measurement model}
+Given $O_k$ and $C_k$ defined as above, the measurement $Z_k$ is defined as:
+\begin{equation}
+    Z_k = \Pi(O_k, C_k)
+\end{equation}
+where $\Pi$ is an operator that combines and randomly shuffles the columns of a matrix.
+\end{definition}
+
+The definition above simply means that the measurement $Z_k$ contains a random number of clutter vectors and possibly a target measurement, but we do not know which is which. We will soon introduce association hypotheses, meaning theories about which column of $Z_k$ that corresponds to the target. 
+
+\begin{definition}{Association hypothesis}
+The association hypotheses are denoted by $\theta$ and defined as:
+\begin{equation}
+    \theta = 
+    \begin{cases}
+        i > 0 & \text{if $z^i$ is an object detection} \\
+        0 & \text{if the object is undetected}
+    \end{cases}
+\end{equation}
+\end{definition}
+
+For filtering we seek to obtain the equation for $p(Z \vert x)$, omitting the time for readability. The following will just be an outline of the derivation, leaving out most of the algebra.
+
+\begin{equation*}
+    p(Z \vert x) = p(Z, m \vert x) = \sum_{\theta = 0}^{m} p(Z, m, \theta \vert x) = \sum_{\theta = 0}^{m} p(Z \vert m, \theta, x) \: p(\theta, m \vert x)
+\end{equation*}
+\begin{equation}
+    = \left[ (1 - P^D(x)) + P^D(x) \: \sum_{\theta = 1}^{m} \frac{h(z^\theta \vert x)}{\lambda(z^\theta)} \right] \: \frac{exp(-\bar{\lambda})}{m!} \prod_{i = 1}^{m} \lambda(z^i)
+\end{equation}
+
+\subsubsection{Single target tracking}
+From \ref{bayesian_filtering} we know that the posterior is given by the following equation. Notice that the proportionality has swallowed some terms not dependent on $x$.
+\begin{equation}
+    \label{eq:mes_mod}
+    p(x \vert Z) \propto p(x) \: p(Z \vert x) \propto p(x) \: \left[ (1 - P^D(x)) + P^D(x) \: \sum_{\theta = 1}^{m} \frac{h(z^\theta \vert x)}{\lambda(z^\theta)} \right]
+\end{equation}
+It can also be shown that the joint distribution of $x$ and $\theta$ given $Z$, can be written as a constant times a pdf over $x$.
+\begin{equation*}
+    p(x, \theta \vert Z) = w_\theta p_\theta(x)
+\end{equation*}
+The following three relations then follow trivially.
+\begin{equation*}
+    w_\theta = Pr(\theta \vert Z)
+\end{equation*}
+\begin{equation*}
+    p_\theta(x) = \frac{p(x, \theta \vert Z)}{w_\theta} = \frac{p(x, \theta \vert Z)}{Pr(\theta \vert Z)} = p(x \vert \theta, Z)
+\end{equation*}
+\begin{equation}
+    \label{eq:also_mes_mod}
+    p(x \vert Z) = \sum_{\theta = 0}^{m} w_\theta \: p_\theta(x)
+\end{equation}
+
+With the knowledge from \autoref{eq:also_mes_mod}, we now want to rewrite \autoref{eq:mes_mod} into that form. This may seem like a complication, but we will later see that the equations simplify nicely with a few assumptions. The transformation is nothing more than taking each term, integrating it and then multiply and divide each component by that integral. Thus, so far changing nothing.
+
+We get $p(x|Z) = \sum_{\theta=0}^{m} w_\theta p_\theta(x)$, where
+
+\[
+\theta = 0: \quad \text{Object is undetected} \quad
+\begin{cases}
+\tilde{w}_0 = \int p(x)(1 - P^{\mathrm{D}}(x)) \, \mathrm{d}x \\[2mm]
+p_0(x) = \dfrac{p(x)(1 - P^{\mathrm{D}}(x))}{\int p(x')(1 - P^{\mathrm{D}}(x')) \, \mathrm{d}x'},
+\end{cases}
+\]
+
+\[
+\theta \in \{1, 2, \ldots, m\}: \quad z^\theta \text{ is object detection} \quad
+\begin{cases}
+\tilde{w}_\theta = \dfrac{1}{\lambda(z^\theta)} \int p(x) P^{\mathrm{D}}(x) g(z^\theta \vert x) \, \mathrm{d}x \\[2mm]
+p_\theta(x) = \dfrac{p(x) P^{\mathrm{D}}(x) g(z^\theta \vert x)}{\int p(x') P^{\mathrm{D}}(x') g(z^\theta \vert x') \, \mathrm{d}x'},
+\end{cases}
+\]
+
+and $w_\theta \propto \tilde{w}_\theta$.
+
+\textbf{Assuming constant detection probability} \\
+Immediate simplifications can be done by assuming $P^D(x) = P^D$. Whether this assumption is valid or not is highly dependent on the detector giving out measurements, and possibly environmental considerations, but in many cases this is fair to assume. In cases where this assumption is not valid or good enough, other pdf approximations such as particle filtering must be used for this algorithm to be usable. Using $P^D$, the posterior simplifies to:
+
+\[
+\theta = 0: \quad \text{Object is undetected} \quad
+\begin{cases}
+\tilde{w}_0 = 1 - P^D \\[2mm]
+p_0(x) = p(x)
+\end{cases}
+\]
+
+\[
+\theta \in \{1, 2, \ldots, m\}: \quad z^\theta \text{ is object detection} \quad
+\begin{cases}
+\tilde{w}_\theta = \dfrac{P^D}{\lambda(z^\theta)} \int p(x) g(z^\theta \vert x) \, \mathrm{d}x \\[2mm]
+p_\theta(x) = \dfrac{p(x) g(z^\theta \vert x)}{\int p(x') g(z^\theta \vert x') \, \mathrm{d}x'},
+\end{cases}
+\]
+
+Looking at $p_\theta(x)$, we see that it is a non-negative integrable function that integrates to one. This means $p_\theta(x)$ is a pdf, and thus we can temporarily ignore the normalization constant since $p_\theta(x)$ only carries information about the shape of the pdf while the weight is captured in $\tilde{w}_\theta$.
+
+\textbf{Gaussian linear assumptions} \\
+The following standard filtering assumptions will now be applied.
+\begin{align*}
+    p(x) &= \mathcal{N}(x; \mu, P) \\
+    h(z \vert x) &= \mathcal{N}(z; Hx, R)
+\end{align*}
+
+Under these assumptions, we see that the solution must be the standard Kalman filter update equations presented in \autoref{bayesian_filtering}. The final solution can then be written as:
+
+\[
+p(x \vert Z) = \sum_{\theta=0}^{m} w_\theta \, p_\theta(x), \qquad
+w_\theta = \dfrac{\tilde{w}_\theta}{\displaystyle\sum_{\theta'=0}^{m} \tilde{w}_{\theta'}}.
+\]
+
+\[
+\theta = 0: \quad \text{Object is undetected} \quad
+\begin{cases}
+\tilde{w}_0 = 1 - P^D \\[2mm]
+p_0(x) = \mathcal{N}(x; \mu, P)
+\end{cases}
+\]
+
+\[
+\theta \in \{1, 2, \ldots, m\}: \quad z^\theta \text{ is object detection} \quad
+\begin{cases}
+\tilde{w}_\theta = \dfrac{P^D}{\lambda(z^\theta)} \, \mathcal{N}(z^\theta; H\mu, S) \\[2mm]
+p_\theta(x) = \mathcal{N}(x; \mu_\theta, P_\theta)
+\end{cases}
+\]
+
+Where the innovation covariance, Kalman gain, and updated moments are given by
+\begin{align*}
+    S &= HPH^\top + R \\
+    K &= PH^\top S^{-1} \\
+    \mu_\theta &= \mu + K\left(z^\theta - H\mu\right) \\
+    P_\theta &= P - KHP.
+\end{align*}
+
+Notice that this is the stage where the weights are finally normalized, giving an actual pdf. This solution is a Gaussian mixture of all the different hypotheses, weighed by how likely the measurements are according to the model. This solution could in theory be implemented as is, but only for a very short time. When the algorithm is iterated across multiple rounds of measurements, there will be introduced $m$ times as many hypotheses at each timestep. This will therefore get out of hand very quickly and further approximations to keep the number of hypotheses from blowing up must therefore be introduced.
+
+\subsection{Material not reused}
+\label{app:not-reused}
+
+Moved from the background chapter and the MTT overview. Log-likelihoods are a candidate for the implementation notes in the method chapter.
+
+\subsubsection{Log-likelihoods}
+One common scheme that a lot of MTT algorithms employ is log-likelihoods. This means that a lot of probabilities in the tracker is stored and computed as the logarithm of the probabilities ($\ln(p)$). There are a lot of upsides to this, as we will soon discover, but just as importantly, there are no real downsides either. As someone familiar with optimization and statistics might already know, the logarithm is a monotonically increasing function. The formal definition; $\text{if } x < y, \text{ then } f(x) < f(y)$, implies that we can still order probabilities from least to most probable by log-likelihoods. It is also trivial to recover the actual probability by the exponential function.
+\medskip
+
+One reason why log-likelihoods are useful is numerical stability. In a multi target setting, it is not unusual to deal with hypotheses or existence probabilities with vanishingly small probabilities. Storing these as log-likelihoods allows for the use of lower precision datatypes, at least until the actual probabilities need computing. 
+\medskip
+
+Another useful property of logarithms is that multiplications become additions and divisions become subtractions. Most filters are based on Markov and conditional independence assumptions. These give clean multiplications, which are just additions under the logarithm. Logarithms are also very useful when normalizing weight vectors, where numerical stability can be a real issue. The following normalization formula is numerically stable and exact, even for very small probabilities. See Gregory Gundersens blog \cite{logsumexp} for the full details and explanation.
+
+\begin{align*}
+    w_{\text{normalized}} &= w - w_{\text{norm}} \\
+    w_{\text{norm}} &= w_{max} + \ln \left( \sum_{h} e^{w_h - w_{max}} \right)
+\end{align*}
+
+\medskip
+
+The last simplification I want to highlight is that Gaussian log-likelihoods are just quadratic forms. A common approximation is to use Gaussian linear assumptions. This leads to the tracker needing to compute a lot of Gaussian likelihoods. Computing the log-likelihoods, simplifies the computation, as seen in \autoref{eq:quadratic_form}. The example computes the log-measurement-likelihood, using $\nu = z - \hat{z}$ as the innovation.
+
+\begin{equation}
+    \ln \mathcal{N}(\mathbf{z}; \hat{\mathbf{z}}, \mathbf{S}) = -\frac{1}{2} \boldsymbol{\nu}^\top \mathbf{S}^{-1} \boldsymbol{\nu} - \frac{1}{2} \ln \lvert 2\pi \mathbf{S} \rvert
+    \label{eq:quadratic_form}
+\end{equation}
+
+\subsubsection{Bayesian filtering}
+\label{bayesian_filtering}
+
+\paragraph{Chapman - Kolmogorov prediction}
+
+\begin{equation}
+    p(x_k \vert z_{1:k-1}) = \int p(x_k \vert x_{k-1}) \: p(x_{k-1} \vert z_{1:k-1}) \: dx_{k-1}
+\end{equation}
+
+Assuming a Gaussian and linear transition model alongside a Gaussian prior.
+
+\begin{align}
+p(x_k \vert x_{k-1}) &\sim \mathcal{N}(x_k; F x_{k-1}, Q) \\
+p(x_{k-1} \vert z_{1:k-1}) &\sim \mathcal{N}(x_{k-1}; \hat{x}_{k-1}, \hat{P}_{k-1})
+\end{align}
+
+Then it can be shown that
+
+\begin{equation}
+    \int \mathcal{N}(x_k; F x_{k-1}, Q) \: \mathcal{N}(x_{k-1}; \hat{x}_{k-1}, \hat{P}_{k-1}) \: dx_{k-1} = \mathcal{N}(x_k; \hat{x}_{k \vert k-1}, \hat{P}_{k \vert k-1})
+\end{equation}
+\begin{align}
+    \hat{x}_{k \vert k-1} &= F \hat{x}_{k-1} \\
+    \hat{P}_{k \vert k-1} &= F \hat{P}_{k-1} F^T + Q
+\end{align}
+
+\paragraph{Bayes update}
+Because of the proportionality in the following equation (TODO: explain why the proportionality must hold), we do not need to find the value in the denominator. The pdf can just be normalized such that it integrates to one.
+
+\begin{equation}
+    p(x_k \vert z_{1:k}) = \frac{p(z_k \vert x_k) p(x_k \vert z_{1:k-1})}{p(z_k \vert z_{1:k-1})} \propto p(z_k \vert x_k) p(x_k \vert z_{1:k-1})
+\end{equation}
+
+\paragraph{Predicted likelihood}
+
+As mentioned above, the value of the so-called predicted likelihood is not always necessary, but in Multi object tracking it may nonetheless be very useful. This is because this density tells us something about how likely a given measurement is, given it comes from the object we are tracking. This value is therefore very useful for the data association.
+
+\begin{equation}
+    p(z_k \vert z_{1:k-1}) = \int p(z_k \vert x_k) p(x_k \vert z_{1:k-1}) dx_k
+\end{equation}
+
+\paragraph{Nearest neighbor algorithms}
+One way to approach hypotheses reduction is to only keep the most probable hypothesis after each iteration. This is essentially a MAP approach to the tracking problem. Each iteration you get rid of all, but the hypothesis with the highest weight, and then use that hypothesis as prior in the next iteration. One possible problem with this approach is that it often underestimates the variance of the true distribution, which can lead to it getting stuck believing the wrong thing for a couple of iterations (SOURCE?).
+
+\paragraph{Probabilistic data association filtering (PDAF)}
+One other approach is to merge all hypotheses into a single Gaussian after each iteration. 
+
+\begin{definition}{Gaussian mixture reduction}
+Given a Gaussian mixture $p(x) = \sum_{\theta=0}^{m} w_\theta \, \mathcal{N}(x; \mu_\theta, P_\theta)$ with $\sum_{\theta=0}^{m} w_\theta = 1$, the mixture can be reduced to a single Gaussian $\mathcal{N}(x; \bar{\mu}, \bar{P})$ with identical first and second moments, given by
+
+\[
+\bar{\mu} = \sum_{\theta=0}^{m} w_\theta \, \mu_\theta
+\]
+
+\[
+\bar{P} = \sum_{\theta=0}^{m} w_\theta P_\theta + w_\theta (\mu_\theta - \bar{\mu})(\mu_\theta - \bar{\mu})^T
+\]
+\end{definition}
+
+It can be shown that this approach is the Gaussian pdf that minimizes the Kullback-Leibler (KL) divergence, and thus it is the Gaussian most "similar" to the mixture.
+
+\paragraph{Gaussian sum filtering}
+Gaussian sum filtering is a collective term of methods where more than one hypothesis is kept after each estimation cycle. In general, you define a maximum number of hypotheses you want to be left with after each estimation cycle. You can then either pick the $N$ most likely hypotheses and let the next prior be a mixture of these, or you can merge similar hypotheses before picking the $N$ most likely. If merging is to be done, you will need to effectively search for and merge similar Gaussians. Depending on your scenario this may or may not be needed and many times nearest neighbors or PDAF will be more than necessary.
+
+\subsubsection{Reading guide and MAP formulation}
+Multi-target tracking (MTT) is the problem of estimating the number of targets and their states over time from noisy, incomplete and ambiguous sensor data. This section is organized around one idea: \emph{a tracker is assembled from interchangeable building blocks}, and the named methods in the literature result from particular block choices. Section~\ref{sec:formulation} states the problem and why it is hard. Section~\ref{sec:anatomy} introduces the blocks and the options for each. Section~\ref{sec:complexity} shows that many of these options exist to manage combinatorial complexity, and Section~\ref{sec:multisensor} covers the second concern that cuts across the blocks: combining data from several sensors. Section~\ref{sec:map} uses the blocks to draw a map of the field, and Section~\ref{sec:families} describes each family in detail. Section~\ref{sec:outside} covers methods that do not fit completely into the standard pipeline. Section~\ref{sec:selection} compares the families and turns the comparison into design choices for this project. Colors identify families consistently throughout.
+
+MTT aims to estimate the optimal sequential states $X_{1:t}$, based on the measurements $Z_{1:t}$. This can be formulated as the following MAP (Maximum a posteriori) estimation problem as presented in \cite{mtt_litterary_review}.
+
+\begin{equation*}
+  \widehat{\mathbf{X}}_{1:t} = \operatorname*{arg\,max}_{\mathbf{X}_{1:t}} P\left(\mathbf{X}_{1:t} \mid \mathbf{Z}_{1:t}\right).
+\end{equation*}
+
+\textcite[Sec.~2]{mtt_litterary_review} then writes that ``different MOT algorithms from previous works can now be thought as designing different approaches to solving the above MAP problem, either from a probabilistic inference perspective or a deterministic optimization perspective.''
+\medskip
+
+Tracking can also be split into online and batch methods. Online trackers process measurements recursively and will be the main focus of this overview. Batch methods process multiple sets of measurements and estimate the entire tracks jointly. \TODO{Maybe add that a lot of probabilistic inference is recursive and a lot of batch methods are optimization based. Need sources for this.}
+
+\subsubsection{StrongSORT example, front-end and occlusion example}
+To illustrate the modularity of tracking algorithms we will present an example in the form of StrongSORT \cite{strongSORT}, which takes DeepSORT~\cite{deepSORT} and upgrades it one block at a time. In the terms of \autoref{tab:designspace}, DeepSORT combines a learned front-end (CNN detector) and a learned re-ID association cost with an otherwise classical back-end: a constant-velocity Kalman filter, Mahalanobis gating, hard association solved by Hungarian matching in a cascade, and a hit/miss counter for track confirmation and deletion. StrongSORT then replaces, one at a time, the re-ID network with a stronger one and the per-track feature bank with an exponential moving average of embeddings (association cost); the constant measurement noise with one scaled by detector confidence, $\tilde{R}_k = (1-c_k)R_k$ (sensor model: a learned quantity inside a classical filter); appearance-only matching with a weighted sum of appearance and kinematic cost (association cost); adds camera-motion compensation to the prediction (motion model); and replaces the matching cascade with a single global assignment (association solver). The mixed upgrades yielded a better performance when compared to DeepSORT, indicating that freely picking blocks not only works, but can increase performance. However, the paper also notes that the matching cascade increased performance in DeepSORT, but decreased it in StrongSORT, motivating the change. This illustrates that although one can pick blocks freely, the best option for one block may depend on the choices made for the others.
+
+\paragraph{Front-end: detections or raw data}
+The front end is what provides input to the tracking algorithm. Often, the front end is provided and not designed with a specific tracker in mind. The reason why we still include it in this overview is that choice of tracker should be done with your front-end in mind. Front-end also splits tracking into Track-before-detect and Tracking-by-detection. The latter is the classic framework introduced in \autoref{sec:formulation}, while the former uses no detector, but tracks based on the high dimensional raw measurement. A hybrid between this is extended object tracking, where each object may generate more than one detection. This further illustrates the importance of knowing your front-end when designing the tracker. It is also worth noting that a lot of modern detectors, e.g. image detectors, can provide more information than just position. An example is color and shape, which can be used to assist association.
+
+To illustrate the power of these techniques, we can imagine a front facing radar. $P_D$ can be adjusted to zero in the area behind other detected objects. This small modelling change allows target estimates to persist even though they are occluded for a long time. All because we told the tracker to not expect the occluded targets to generate measurements. 
+
+\subsubsection{Multiple sensors}
+\label{sec:multisensor}
+
+\begin{itemize}
+    \item Highlight that this is an issue that cut across blocks and families.
+    \item The correct way to handle multiple sensors depends on a lot of factors; (the sensors, assumptions about independence, order and temporal difference between measurements, how much computation one can afford).
+\end{itemize}
+
+\paragraph{What changes for each sensor.} Every sensor $s$ comes with its own sensor model: a measurement function $h_s$, noise covariance $R_s$, detection probability $\PD^{s}$ and clutter model (Section~\ref{sec:anatomy}). The tracker must apply the right model to each measurement, since sensors differ in dimension, accuracy and false-alarm behaviour. Two practical requirements follow. Measurements must be expressed in a common frame, which requires the sensors to be registered to each other \TODO{cite}. Sensors also rarely report at the same time, so the motion model must support arbitrary time steps, and measurements that arrive late must be handled \TODO{cite out-of-sequence measurement handling}.
+
+\paragraph{Where the sensors are combined.} Three architectures cover most of the literature (\autoref{tab:multisensor}). The choice is about which association problem has to be solved, so it ties back to the solvers in \autoref{tab:solvers}.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Where sensors can be combined.
+  \TODO{Verify the statements and add references.}}
+\label{tab:multisensor}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{3.8cm} X X}
+\toprule
+Architecture & Association problem & Strength & Weakness \\
+\midrule
+Centralised, sequential
+  & One single-sensor problem per scan, solved in turn
+  & Same cost as a single sensor; handles asynchronous scans naturally
+  & Truncation after one sensor (pruning, marginalisation) can discard hypotheses a later sensor would have supported, so the result depends on the order \\ \addlinespace
+Centralised, joint
+  & One multi-dimensional assignment over simultaneous scans (NP-hard for three or more sensors)
+  & Keeps all cross-sensor evidence
+  & Cost grows quickly with the number of sensors; needs simultaneous scans or approximations (e.g.\ Gibbs sampling) \\ \addlinespace
+Distributed (track-level)
+  & Track-to-track association, then fusion of local tracks
+  & Low bandwidth; modular; local trackers may differ
+  & Discards measurement-level information; local tracks have correlated errors, so naive fusion is overconfident (covariance intersection is one remedy) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Relation to the families.} The architecture can in principle be chosen independently of the family. Any recursive tracker can process sensor scans sequentially, because each scan is just another set of measurements with its own sensor model. In the exact Bayes recursion, sequential and joint updates agree when the sensors are conditionally independent given the targets. The family matters through cost and through how much a truncation between sensors can lose, which is why \autoref{fig:taxonomy} treats multi-sensor handling as orthogonal to the families. For PHD-type filters the sequential update is itself an approximation that depends on the order of the sensors \TODO{cite iterated-corrector PHD/CPHD}. Multi-sensor extensions of the multi-hypothesis filters exist \TODO{cite, e.g.\ multi-sensor GLMB}.
+
+\subsubsection{A map of the field}
+\label{sec:map}
+
+\begin{itemize}
+    \item Make the scope explicit; This is a map of the field concerning probabilistic recursive trackers.
+    \item Highlight that the distinction between RFS theory and classical approaches is mainly due to the mathematical framework that was used to develop them and that the differences between the named methods in literature can be small. The differences are usually much larger along the rows in \autoref{fig:taxonomy}. \TODO{Cite the papers that make these links explicit (Williams on PMB vs.\ JIPDA; Garc\'ia-Fern\'andez et al.\ on PMBM vs.\ $\delta$-GLMB).}
+    \item Highlight that the named methods in literature sometimes are labeled as TO or HO because that was how they were developed, but that this is due to history and not limitations in the algorithm formulations.
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.6cm}}
+\toprule
+Association hypotheses kept & Vector-based (classical) & Set-based (RFS) \\
+\midrule
+\cellcolor{famIMP!30}None (association marginalised inside the update)
+  & \cellcolor{famIMP!12}--
+  & \cellcolor{famIMP!12}PHD, CPHD (no identities) \\
+\cellcolor{famSH!30}One, hard
+  & \cellcolor{famSH!12}GNN; SORT, DeepSORT, ByteTrack
+  & \cellcolor{famSH!12}\emph{rare} (e.g.\ GNN-PMB) \\
+\cellcolor{famSM!30}One, marginalised (soft)
+  & \cellcolor{famSM!12}PDA, JPDA, IPDA, JIPDA
+  & \cellcolor{famSM!12}PMB, LMB, MeMBer \\
+\cellcolor{famMH!30}Many, hypothesis-oriented
+  & \cellcolor{famMH!12}Reid's MHT (HOMHT)
+  & \cellcolor{famMH!12}$\delta$-GLMB \\
+\cellcolor{famMH!30}Many, track-oriented
+  & \cellcolor{famMH!12}Track-oriented MHT (TOMHT)
+  & \cellcolor{famMH!12}PMBM \\
+\midrule
+\multicolumn{3}{p{11.8cm}}{\emph{Orthogonal to every cell:} front-end (detections or raw data), learned components, multi-sensor architecture (Sec.~\ref{sec:multisensor}).} \\
+\multicolumn{3}{p{11.8cm}}{\emph{Outside the grid:} methods that fuse or replace blocks (Sec.~\ref{sec:outside}, colour \textcolor{famOUT}{\textbf{purple}}).} \\
+\bottomrule
+\end{tabular}
+\caption{Map of detection-based MTT. Rows (families) are the association decision; fidelity and cost increase downwards. Columns are the modelling framework. Methods in the same row share their association structure. \TODO{Verify GNN-PMB and the MeMBer placement.}}
+\label{fig:taxonomy}
+\end{figure}
+
+Table~\ref{tab:recipes} makes the building-block view explicit by listing the choices each named method makes. Front-end, motion model and filter are omitted because every method accepts any choice there.
+
+\subsubsection{The families in detail}
+\label{app:old-families}
+
+Each family follows the same template so that the reader can scan across
+them: idea, recipe, assumptions, limits, typical use. Vector-based and
+RFS-based members of a family are described together.
+
+\familycard{famSH}{One hard hypothesis (GNN, SORT-family)}
+% IDEA
+ {Commit to the single best global assignment each scan. Analog to MAP estimation in the sense that we only care about the most probable explanation.} 
+% RECIPIE
+ {Hungarian/auction; heuristic existence. SORT-family = same recipe with learned detector and (DeepSORT) learned re-ID cost.}
+% ASSUMES
+ {Well-separated targets, low clutter, or strong appearance cues.}
+% LIMITS
+ {Irreversible errors under ambiguity; track swaps at crossings.}
+% TYPICAL USE
+ {Low-cost real-time systems; video tracking-by-detection.}
+
+\familycard{famSM}{One marginalised hypothesis (JPDA, JIPDA, PMB, LMB)}
+ {Weight all feasible associations, then collapse to one hypothesis per scan. Analog to MMSE in the sense that we consider all feasible associations and weigh them by how probable they are. The updated state is then a weighed sum of updates, collapsing the state back to the same size as the prior.}
+ {Approximate marginals (enumeration, LBP, $k$-best); existence probability (JIPDA, PMB, LMB) or external logic (JPDA).}
+ {Moderate clutter; ambiguity resolves within one scan.}
+ {Track coalescence for closely spaced targets; information lost by marginalizing.}
+ {Cluttered scenes with moderate compute budget.}
+
+\familycard{famMH}{Many hypotheses (MHT, PMBM, $\delta$-GLMB)}
+ {Keep competing global hypotheses and defer decisions until later data resolves them. We accept that not all ambiguity can be resolved until more evidence has arrived. Therefore, keep the N best hypotheses and update these as new measurements arrive.}
+ {Murty or Gibbs; pruning, capping, N-scan; track-oriented (TOMHT, PMBM) or hypothesis-oriented (HOMHT, $\delta$-GLMB) storage.}
+ {Enough compute; reduction parameters tuned to the scenario.}
+ {Exponential growth held back only by approximations; tuning-sensitive.}
+ {Ambiguous, cluttered scenes; crossing targets.}
+
+\familycard{famIMP}{Implicit association (PHD, CPHD)}
+ {Propagate only the first moment (and cardinality for CPHD) of the multi-target density; association is summed out inside the update.}
+ {No association solver; Gaussian-mixture or particle implementation; birth intensity.}
+ {Poisson-type models; identities not required.}
+ {No track identities without extra labelling; poor for close targets; ``spooky effect'' in CPHD.}
+ {Many targets, estimating counts and densities rather than tracks.}
+
+So far every method fits the pipeline of Fig.~\ref{fig:pipeline}. The
+next subsection covers those that do not.
+
+\subsubsection{Methods outside the pipeline}
+\label{sec:outside}
+
+Some methods do not fill the slots of Fig.~\ref{fig:pipeline} one by one. They are still described with the same vocabulary, by stating which blocks they \emph{fuse} into one operation and which they \emph{replace} (Fig.~\ref{fig:rewired}). This keeps them on the same map: each strip shows what is gained and what modularity is lost.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  blk/.style={draw, rounded corners=2pt, minimum height=0.7cm, font=\scriptsize,
+              align=center, fill=white, inner sep=1pt},
+  rl/.style={font=\scriptsize, anchor=east, align=right, text width=3.0cm}]
+% header
+\foreach \i/\t in {0/Front-end, 1/Prediction, 2/Gating, 3/Association, 4/Update, 5/Existence}
+  {\node[font=\scriptsize\bfseries] at (\i*1.9, 0.6) {\t};}
+% standard
+\node[rl] at (-1.1,0) {Standard pipeline};
+\foreach \i/\t in {0/Detector,1/Motion,2/Gate,3/Assign,4/Filter,5/Logic}{\mttblk{\i}{\i}{0}{\t}{}}
+% PHD
+\node[rl] at (-1.1,-0.9) {\textcolor{famIMP}{PHD / CPHD}};
+\foreach \i/\t in {0/Detector,1/Motion,2/Gate}{\mttblk{\i}{\i}{-0.9}{\t}{}}
+\mttblk{3}{5}{-0.9}{Single intensity recursion (association summed out)}{fill=famIMP!20}
+% TBD
+\node[rl] at (-1.1,-1.8) {\textcolor{famOUT}{Track-before-detect}};
+\mttblk{0}{0}{-1.8}{Raw data}{fill=famOUT!20}
+\mttblk{1}{1}{-1.8}{Motion}{}
+\mttblk{2}{4}{-1.8}{Evidence integrated over time (no thresholding)}{fill=famOUT!20}
+\mttblk{5}{5}{-1.8}{Threshold}{}
+% R-RANSAC
+\node[rl] at (-1.1,-2.7) {\textcolor{famOUT}{R-RANSAC}};
+\foreach \i/\t in {0/Detector,1/Motion,2/Gate,3/Assign,4/Filter}{\mttblk{\i}{\i}{-2.7}{\t}{}}
+\mttblk{5}{5}{-2.7}{Window\\RANSAC}{fill=famOUT!20}
+% batch / network flow
+\node[rl] at (-1.1,-3.6) {\textcolor{famOUT}{Batch / network flow}};
+\mttblk{0}{0}{-3.6}{Detector}{}
+\mttblk{1}{5}{-3.6}{Joint optimisation over a time window (all associations and track starts/ends at once)}{fill=famOUT!20}
+% end-to-end
+\node[rl] at (-1.1,-4.5) {\textcolor{famOUT}{End-to-end transformer}};
+\mttblk{0}{5}{-4.5}{Learned network: detection, association and track management as track queries}{fill=accLRN!20}
+\end{tikzpicture}}
+\caption{Methods described by the blocks they fuse (wide boxes) or replace (shaded boxes). White boxes are standard blocks. \TODO{Check correctness}}
+\label{fig:rewired}
+\end{figure}
+
+\paragraph{\textcolor{famOUT}{Track-before-detect.}}
+Fuses detection, association and update by integrating raw sensor evidence over time. Gains: low-SNR targets. Costs: heavy computation, sensor-specific. Dynamic programming, particle and RFS-based (Bernoulli) variants.
+\paragraph{\textcolor{famOUT}{Recursive RANSAC.}}
+Replaces probabilistic initiation with hypothesise-and-test over a measurement window; otherwise a bank of filters with heuristic association. Mostly a different existence block.
+\paragraph{\textcolor{famOUT}{Batch and network-flow methods.}}
+Solve association over a whole window jointly (min-cost flow, multi-frame assignment). Related to N-scan MHT; offline or with latency.
+\paragraph{\textcolor{famOUT}{End-to-end learned trackers.}}
+TrackFormer, MOTR: track queries carry identity across frames, so association and existence are learned jointly. Gains: no hand-tuned association. Costs: no explicit uncertainty, large training sets, domain shift. Contrast with Table~\ref{tab:designspace}, where learning replaces a single block.
+
+With all methods placed on the same vocabulary, they can be compared on common criteria.
+
+\subsubsection{Comparison and design guide}
+\label{sec:selection}
+
+The families are compared on what each method assumes and what it outputs (\autoref{tab:compare}). Failure modes are described under \emph{Limits} in Section~\ref{sec:families}, and cost follows from where a family stops on the approximation ladder (Section~\ref{sec:complexity}).
+
+\begin{table}[htbp]
+\centering\small
+\caption{Assumptions and outputs by method. \TODO{Verify each cell against the cited sources.}}
+\label{tab:compare}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.0cm} p{2.3cm} c p{2.6cm} X p{2.0cm}}
+\toprule
+Method & Target count & Identity & Cost & Key requirements & Multi-sensor \\
+\midrule
+\rowcolor{famSH!15}  GNN, SORT-family & external logic & \cmark & polynomial & separated targets or appearance cues & sequential \\
+\rowcolor{famSM!15}  JPDA, JIPDA & logic / existence & \cmark & exponential (approx.\ exist) & moderate clutter & sequential \\
+\rowcolor{famSM!15}  PMB, LMB  & estimated & \cmark & moderate & known $\PD$, clutter rate & sequential \\
+\rowcolor{famMH!15}  MHT       & hypothesis-level & \cmark & exponential, pruned & pruning parameters & centralized \\
+\rowcolor{famMH!15}  PMBM, $\delta$-GLMB & estimated & \cmark & moderate--high & known $\PD$, clutter rate, birth model & centralized \\
+\rowcolor{famIMP!15} PHD/CPHD  & estimated & \xmark & low--moderate & Poisson-type models & approximate \\
+\rowcolor{famOUT!15} TBD       & implicit & varies & high & raw data & sensor-specific \\
+\rowcolor{famOUT!15} End-to-end & learned & \cmark & GPU inference & training data & mostly single \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+No family dominates: the best choice depends on clutter, target dynamics and available compute. Because the blocks are independent, the choice is best made block by block, which \autoref{tab:selection} does with one question per block.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Design guide, one question per building block.
+  \TODO{Adjust after finalizing the comparison; optionally condense into a flowchart.}}
+\label{tab:selection}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.3cm} X X}
+\toprule
+Block & Question & If yes, lean towards \\
+\midrule
+Front-end   & Very low SNR, and raw data available? & Track-before-detect \\
+Motion model & Maneuvering targets? Training data for unusual dynamics? & IMM; learned motion model \\
+Association cost & Rich appearance cues (e.g.\ EO video)? & Add learned re-ID affinity to the kinematic cost \\
+Association decision & Frequent ambiguity (crossings, close spacing, clutter)? & Deferred (MHT, PMBM); otherwise marginal (JIPDA, PMB) or hard (GNN) \\
+Representation & Many hypotheses with long shared histories? & Track-oriented (TOMHT, PMBM) \\
+Existence   & Frequent births/deaths, long detection gaps, undetected targets? & Probabilistic existence, Poisson undetected model \\
+Complexity  & Hard real-time budget? & Gating and clustering always; then capping, small $k$, or marginalization \\
+Multi-sensor & Heterogeneous or distributed sensors? & Centralized if bandwidth allows, else track-to-track fusion \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Implications for this project.}
+Walk through Table~\ref{tab:selection} for your own setting: heterogeneous sensors, sparse and slow-moving targets, sea-return clutter, ground truth from AIS. State the resulting recipe (one choice per block) and which options are ruled out, and why.
+
+\paragraph{Summary.}
+Two or three sentences: a tracker is a recipe of interchangeable blocks; families differ in how many association hypotheses they keep, which is largely a complexity decision; RFS is a modelling framework that mainly improves the existence block; and what your project takes from this.
+
+\subsubsection{Solver table (MTT overview)}
+\begin{table}[htbp]
+\centering\small
+\caption{Association problems and their exact and approximate solvers.
+  \TODO{Verify complexity statements and add references.}}
+\label{tab:solvers}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.6cm} X}
+\toprule
+Problem (used by) & Exact & Approximate \\
+\midrule
+Best single assignment (GNN, SORT) & Hungarian, auction, JVC (polynomial) & Greedy matching \\
+$k$ best assignments (MHT, PMBM, $\delta$-GLMB) & Murty's algorithm (polynomial in $k$) & Gibbs sampling, randomised $k$-best \\
+Marginal association probabilities (JPDA, JIPDA, PMB, LMB) & Full enumeration (\#P-hard in general) & $k$-best truncation, loopy belief propagation (LBP), MCMC/Gibbs \\
+Multi-frame assignment (N-scan MHT, batch) & Integer programming (NP-hard for $\geq 3$ frames) & Lagrangian relaxation, network flow (special cost structure) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Stubs from the old method chapter}
+An overview of the filter that has been implemented in this project.
+
+\paragraph{Single scan overview}
+Pseudocode for a single scan.
+
+\paragraph{The state}
+PPP and MBM, local and global hypotheses, clusters, tracks
+
+\paragraph{Prediction}
+N-vector
+
+\paragraph{Gating}
+According to the n-vector gating presented in the paper.
+
+\paragraph{Single hypothesis update}
+PPP, existing (detected and misdetected), new Bernoulli.
+
+\paragraph{Data association}
+Building the reward matrix. Running Murty per cluster.
+
+
+\subsubsection{Supervisor meeting notes (old results chapter)}
+Meeting notes:
+\begin{itemize}
+    \item MTT overview: some is very vision based. Problem formulation should probably be narrowed down even more to eliminate this angle. Trash the separate RFS angle, but highlight the historic difference in the literature anyway.
+    \item Get a good description of a PMBM filter and how the implementation differs from the standard formulation.
+    \item Describe in detail how the specific deviations are handled and why.
+    \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
+\end{itemize}
+
+
+\subsubsection{Notes for the theory section (PMBM chapter)}
+All points are answered by the new structure.
+\begin{itemize}
+    \item There must be a cohesive link between the problem we are aiming to solve, the MTT overview, the PMBM chapter and the rest of the theory. Also tie this to the method used. This is the hard part, but a make or break for the report.
+    \item Pretty soon an introduction should be written, where the actual scope of the project must be defined. What are we aiming to solve here? Do we attack the problem of long revisit time, scale or consistency? What about the N-vector stuff?
+    \item GOSPA must be covered or at least some evaluation metric before the results can be presented.
+    \item Where should the data association problem be covered. It is a pretty big chapter in of itself, so scope must be chosen carefully here. Maybe cover it at the same time as hypothesis representation as they have some overlap and need each other for understanding the full picture.
+    \item See literary review feedback by Claude. Some points are repeated from here, but only the most important ones.
+    \item To include or not to include testing using the SAR and NRD models?
+\end{itemize}

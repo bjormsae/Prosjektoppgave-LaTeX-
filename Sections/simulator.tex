@@ -1,0 +1,163 @@
+\section{Simulation environment}
+\label{sec:simulator}
+\begin{itemize}
+    \item Role: generate measurements with known truth, so the tracker can be evaluated. Listed as a contribution in Section~\ref{sec:contributions}.
+    \item Builds on Chapter~\ref{sec:nvector}: positions are n-vectors, and noise is drawn in the local North-East frame at the true position.
+    \item Reproducibility: fixed seed, the same Earth radius in simulator, tracker and metric.
+\end{itemize}
+
+% =====================================================================
+\subsection{Overview}
+\label{sec:sim-overview}
+\begin{itemize}
+    \item One figure of the pipeline: AIS data $\rightarrow$ cleaned and interpolated truth $\rightarrow$ sensor (field of view, detection, noise) $\rightarrow$ measurements plus clutter $\rightarrow$ tracker.
+    \item The notes below are from the old method chapter.
+\end{itemize}
+
+\begin{itemize}
+    \item Using historic AIS-data as ground truth. Downloaded from Kystverket. Used linear interpolation between data points to achieve continuous time sampling. Removed velocity spikes to also include velocity in the "ground truth" (needed for accurate SAR sampling).
+    \item Added SAR, NRD and EO measurements to be Gaussian in the local North-East frame. Sampling is done by adding the zero mean Gaussian to the sampled N-vector.
+    \item Added uniform clutter to the simulator.
+    \item The sensor area is defined by a circle with center N-vector and measurement radius. This is done because the within sensor-checks become trivial dot products with N-vectors.
+\end{itemize}
+
+% =====================================================================
+\subsection{Ground truth from AIS}
+\label{sec:sim-truth}
+\begin{itemize}
+    \item Data: AIS from the Norwegian Coastal Administration (Kystverket): the Vestlandet files (2026-08-01) and the national file (2025-09-25). Class A and B reports from terrestrial and satellite sources; LRIT dropped.
+    \item Cleaning: sentinel values scrubbed, duplicates merged, spikes removed (velocity spikes too, since the truth includes velocity).
+    \item Linear interpolation to the scan times. Gaps up to 368~s are bridged by straight lines; the truth is therefore not exactly constant velocity or great circle.
+    \item AIS is ground truth only, not a sensor.
+    \item The truth at each scan is the vessels inside the field of view. About 80\,\% of the vessels in the proof-of-concept area are stationary, and 39\,\% lie within 100~m of another vessel.
+\end{itemize}
+
+% =====================================================================
+\subsection{Sensor models}
+\label{sec:sim-sensors}
+\begin{itemize}
+    \item EO first and in full: it is the only sensor used in the experiments. Constant isotropic noise, $\sigma = 300$~m per axis, $\PD = 0.9$, static circular field of view. \TODO{Justify $\sigma = 300$~m.}
+    \item Noise is drawn in the local azimuthal-equidistant North-East frame at the true position, so there is no projection mismatch between simulator and tracker.
+    \item The field of view is a circle around a centre n-vector; the inside test is a dot product.
+    \item SAR and NRD short: implemented in the simulator, not evaluated here, used in the thesis. Keep the azimuth-shift discussion compact; it motivates a state-dependent $R$ (further work).
+    \item Reorder: EO, then SAR, then NRD.
+\end{itemize}
+
+\subsubsection{Electro-optical (EO) measurements}
+As with both SAR and NRD, Electro-optical detectors are complicated and best abstracted away. Again, we are left with a direct position measurement on the form:
+
+\[
+z = Hx + v, \quad H = \begin{bmatrix} I & 0 \end{bmatrix}
+\]
+With the noise $v$ is defined as
+\[
+v \sim \mathcal{N}(\mathbf{0}, \mathbf{R})
+\]
+Where $\mathbf{R}$ is the measurement noise covariance matrix. In the case of EO, the variance is not reported by the sensor, thus we model all measurements with the same covariance matrix $\mathbf{R}$.
+
+\subsubsection{Synthetic Aperture Radar (SAR)}
+SAR is a type of radar that can be affixed to either satellites or aircraft, moving above the earths surface. There is a lot that can be said about SAR and detecting objects using it. The detection algorithms can be very complex beasts and there is a whole field of research dedicated to just detecting objects using SAR. Here however, we will be using very simple models for the detections. We abstract away the detector entirely and assume only position is retuned. The detector will also return a possibly empty set of false detections. This means that a clutter model should also be included when updating states from a SAR measurement.
+\medskip
+
+A standard assumption for SAR detectors is that objects are stationary. When this assumption is invalidated, phenomena such as SAR azimuth shift can occur. SAR azimuth shift occurs when an object has a velocity component that is perpendicular to the radar platform velocity vector \cite{SAR_azimuth_shift}. The geometry and result can be seen in \autoref{fig:sar_azimuth_shift}, where the imaged position is shifted in relation to the true position.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Images/sar_azimuth_shift.png}
+    \caption{Depicting the geometry of SAR azimuth shift. Subfigure $(a)$ shows the decomposed target velocity vector alongside the velocity vector of the radar platform. Subfigure $(b)$ shows the projected velocity component into the line of sight. This is the component that causes the Doppler offset.}
+    \label{fig:sar_azimuth_shift}
+\end{figure}
+
+Since the azimuth shift is a known deterministic phenomenon, it can be compensated for. The main difficulty regarding compensation is that the velocity vector of the moving target must be known. This is fine for simulating measurements, but robust estimation of velocity in a multi target tracking scenario may be infeasible. It may also be unwanted, since using estimated states to compensate the measurement ruins the linear assumptions of the filtering, and may cause unforeseen consequences.
+\medskip
+
+There are two other ways one could incorporate azimuth shift in the measurement model. One alternative is to increase the noise of each measurement based on the absolute velocity of each vessel. It is generally easier to get a good estimate of how fast something is moving than to estimate the direction as well. This yields the measurement model below and may yield better results than estimating the exact azimuth shift. It does however also invalidate the linear assumptions of the filter and needs to be tested rigorously in various conditions.
+\[
+z = Hx + v(\nu), \quad H = \begin{bmatrix} I & 0 \end{bmatrix}
+\]
+With the noise $v(\nu)$ is defined as
+\[
+v(\nu) \sim \mathcal{N}(\mathbf{0}, \mathbf{R}(\nu))
+\]
+Where $\mathbf{R}$ is the measurement noise covariance matrix.
+\medskip
+
+The last approach is to just increase the measurement noise, but keep it constant for all measurements. This keeps the filter linear and is in many ways the ``safest'', but it will reduce the value of measurements where the vessel is at low velocity.
+\medskip
+
+It is also worth noting that SAR detectors could possibly return more information than just positions, but that will not be considered in this report.
+
+\subsubsection{Navigation Radar Detector (NRD)}
+NRD is a satellite borne detector, which tracks and locates the radar signals from civilian navigation radars \cite{nrd_ffi}. For tracking this means that the detector can be abstracted away, leaving a pure position measurement. What is special about NRD is that it can report the uncertainty of the measurement alongside each measurement. This means $R$ can be individual to each measurement. In general, the uncertainty increases radially around the center point of our measurement. This is useful for both simulation and filtering since the uncertainty is dependent on the measurement position and not the state position. One strength with NRD is that since it only detects radar signals, false positives are almost non-existent. This means that the measurements can be assumed to have a clutter intensity of almost zero. The measurement model, stated for completeness is then:
+
+\[
+z_i = Hx + v_i, \quad H = \begin{bmatrix} I & 0 \end{bmatrix}
+\]
+With the noise $v_i$ is defined as
+\[
+v_i \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_i)
+\]
+Where $\mathbf{R}_i$ is the measurement noise covariance matrix, which is individual to each measurement.
+
+
+% =====================================================================
+\subsection{Clutter on a sphere}
+A standard clutter model used for target tracking is the uniform Poisson clutter model. It is parameterized by the clutter intensity $\lambda_c$, which is the expected number of clutter measurements per unit area/volume. Each clutter measurement is independent, and uniformly distributed within the measurement area. In a rectangular measurement area the generation of a clutter measurement is trivial.
+
+\begin{equation*}
+    x = \mathcal{U}(\text{min}_x, \text{max}_x) \quad y = \mathcal{U}(\text{min}_y, \text{max}_y)
+\end{equation*}
+
+We would now like to sample uniform clutter on the surface of a sphere, the measurement area defined by a maximum angle $\theta_{max}$ between N-vectors of the center and the measurement rim. This is the same approach used earlier for gating. An illustration of the uniform clutter can be seen in \autoref{fig:spherical_cap}.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/spherical_cap.png}
+    \caption{Points sampled uniformly on a spherical cap, centered around an arbitrary axis.}
+    \label{fig:spherical_cap}
+\end{figure}
+
+The first part of sampling clutter is to sample the number of clutter measurements, or the cardinality of the Poisson point process if you want. We denote this number $m_k$ and sample it from a Poisson distribution $m_k \sim \text{Po}(\lambda_c A)$. The surface area $A$ of a spherical cap, can be parameterized a few different ways, but using $R$ as the radius of the sphere and $\theta_{max}$ is the most natural in this case. The area is then given by the following formula \parencite{spherical_cap}.
+
+\begin{equation*}
+    A = 2 \pi R^2 (1 - \cos(\theta_{max}))
+\end{equation*}
+
+The clutter measurements should then be uniformly distributed on the spherical cap. The derivation is explained in detail in \parencite{clutter_sphere}, so I will only touch over the main points here. 
+\medskip
+
+We can parameterize the points on the spherical cap by the cap axis (N-vector), radial distance from the cap axis ($\theta \in [0, \theta_{max}]$) and angle between the point and some arbitrary reference point ($\psi \in [0, 2 \pi]$). The angle $\psi$ is illustrated in \autoref{fig:psi_illustration}. We can then sample two independent uniform distributions and get uniform points on the spherical cap by the following transformations.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/psi_illustration.png}
+    \caption{An illustration of the angle $\psi$}
+    \label{fig:psi_illustration}
+\end{figure}
+
+\begin{equation*}
+    U_1 = \mathcal{U}(0, 1) \quad U_2 = \mathcal{U}(0, 2 \pi)
+\end{equation*}
+
+\begin{align*}
+    \psi &= U_2 \\
+    z &= \cos(\theta_{max}) + U_1 (1-\cos(\theta_{max})) \\
+    \theta &= \cos^{-1}(z)
+\end{align*}
+
+The uniform point can then be returned as an N-vector by following Example 8 in \parencite{ffi_nvector}. Note that since the points sampled are random and uniform, the result is invariant to rotation about the cap axis. This means that it is not necessary to specify $\psi$ and $\theta$ in the correct East - North frame.
+\begin{itemize}
+    \item Moved here from the geometry chapter: the theory is short and exists to generate clutter. The tracker only needs the density $\lambda^c$ (Section~\ref{sec:formulation}).
+    \item The clutter densities used: $10^{-9}$, $10^{-8}$ and $10^{-7}$ per m$^2$ (0.45 to 45 clutter points per scan at 12~km radius).
+\end{itemize}
+
+% =====================================================================
+\subsection{Scenarios}
+\label{sec:sim-scenarios}
+\begin{itemize}
+    \item One table of the windows used, with centre, radius, start, scans, scan interval, vessels in view and share moving.
+    \item Proof-of-concept window: 59.09$^\circ$\,N, 5.45$^\circ$\,E, radius 12~km, 60 scans of 60~s, 14--19 vessels.
+    \item Scale windows: same centre, radius 12--100~km, 30 scans, 17--398 vessels.
+    \item Named scenarios on the national data (fjords, open water, shipping lanes), and how they were selected (enough vessels, no long AIS gaps for moving vessels). Use only the ones the results use.
+    \item One map figure of a scenario with truth and measurements.
+\end{itemize}

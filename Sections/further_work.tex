@@ -1,2 +1,38 @@
 \section{Further work}
-Most likely a lot.
+\label{sec:further-work}
+\begin{itemize}
+    \item The plan for the thesis, in priority order.
+\end{itemize}
+
+\subsection{Long revisit times}
+\begin{itemize}
+    \item Cheaper hypothesis generation for giant groups: Gibbs sampling, or a smaller budget for large groups.
+    \item Better long-horizon prediction: IMM for ferries, route or traffic priors, learned prediction from AIS.
+    \item More frequent effective updates from several sensors.
+    \item From the old method chapter (``The big problem''):
+    \begin{itemize}
+    \item Predicting over large horizons leads to very large uncertainties in position. This makes gating and clustering ineffective because everything is put into the same data association algorithm. How can we combat this? 
+    \item More frequent measurements. Find out what the limit is for the clustering.
+    \item More accurate prediction. This would also handle cases such as ferries which can have high speeds, but switch direction before a new measurement has time to arrive. 
+    \end{itemize}
+\end{itemize}
+
+\subsection{Sensor realism}
+\begin{itemize}
+    \item $\PD(x)$ with real footprints and land masking.
+    \item Uniform birth over the field of view, together with a Bernoulli for every measurement (D1).
+    \item State-dependent $R$ (SAR azimuth shift, NRD).
+    \item Several sensors and moving fields of view.
+\end{itemize}
+
+\subsection{The geometry experiment}
+\begin{itemize}
+    \item A scenario where n-vector should matter (Section~\ref{sec:nvector-error}): hundreds of km and long gaps.
+    \item Great circle versus rhumb line, decided on AIS data.
+\end{itemize}
+
+\subsection{Evaluation and estimation}
+\begin{itemize}
+    \item Trajectory metrics (track switches), a less flip-sensitive estimator, trajectory PMBM or smoothing.
+    \item Process-noise study.
+\end{itemize}
