@@ -1,4 +1,11 @@
 \section{The PMBM filter}
+\label{sec:pmbm}
+\begin{itemize}
+    \item Rule for this chapter: the standard PMBM as the literature defines it (\cite{garcia_2018_pmbm}). The choices and deviations of this work go in the method chapter.
+    \item Add a notation table that matches Section~\ref{sec:formulation}.
+    \item The flow figure is taken from \cite{chalmers_mot_course}: redraw it, or make sure the caption and permission are in order.
+\end{itemize}
+
 Introduced by \textcite{williams_pmbm_2015}, the PMBM filter is the exact conjugate prior for the standard model assumptions in recursive multi target tracking. \textcite{garcia_2018_pmbm} and \textcite{garcia_2017_pmbm} finds that, with standard reduction techniques, the PMBM filter can be implemented and yields better performance than comparable RFS-filters on challenging tracking scenarios. 
 \medskip
 
@@ -122,6 +129,12 @@ When applying linear Gaussian and constant $P_S$ assumptions, the integral simpl
 \end{align*}
 
 \subsection{PMBM update}
+\label{sec:pmbm-update}
+\begin{itemize}
+    \item Fix the notation: \autoref{eq:upd_mbm_d_w} and \autoref{eq:upd_mbm_d_p} mix $g(z \mid x)$ and $h(z \mid x)$; use $h$ as in Section~\ref{sec:formulation}. Use $\PD$ and $\PS$ consistently instead of $p_D$ and $p_S$.
+    \item State at the start that this section gives the \emph{single-target} (local) hypotheses; how they combine into global hypotheses follows in Section~\ref{sec:pmbm-da}.
+\end{itemize}
+
 Having used birth, survival and a motion model to predict in the absence of measurement, we will now move on to inference from measurements. \autoref{fig:pmbm_flow} introduces the vocabulary for the section: detections and missed detections. This is also the way hypotheses evolve, as each measurement can come from an existing target, a new target or clutter. 
 \medskip
 
@@ -236,20 +249,104 @@ Under linear Gaussian assumptions and constant $p_D$, this is a standard Kalman 
   P^{i,(a^i,j)}_{k|k} &= \big(I - K^{i,a^i}_k H\big) P^{i,a^i}_{k|k-1}.
 \end{align*}
 
-\subsection{PMBM reduction}
 
-\textbf{Capping} \\
-
-\textbf{Pruning} \\
-
-\textbf{Recycling} \\
-
-\subsection{Thoughts for the theory section}
+% =====================================================================
+\subsection{Global hypotheses and data association}
+\label{sec:pmbm-da}
 \begin{itemize}
-    \item There must be a cohesive link between the problem we are aiming to solve, the MTT overview, the PMBM chapter and the rest of the theory. Also tie this to the method used. This is the hard part, but a make or break for the report.
-    \item Pretty soon an introduction should be written, where the actual scope of the project must be defined. What are we aiming to solve here? Do we attack the problem of long revisit time, scale or consistency? What about the N-vector stuff?
-    \item GOSPA must be covered or at least some evaluation metric before the results can be presented.
-    \item Where should the data association problem be covered. It is a pretty big chapter in of itself, so scope must be chosen carefully here. Maybe cover it at the same time as hypothesis representation as they have some overlap and need each other for understanding the full picture.
-    \item See literary review feedback by Claude. Some points are repeated from here, but only the most important ones.
-    \item To include or not to include testing using the SAR and NRD models?
+    \item The local hypotheses of Section~\ref{sec:pmbm-update} combine into global hypotheses: each prior global hypothesis picks one child per track, and each measurement is used exactly once, either by an existing track or by its own new Bernoulli (new target or clutter).
+    \item The weight of a new global hypothesis is the product of the chosen local weights, normalized over all global hypotheses.
+    \item The number of new global hypotheses grows combinatorially, so only the $k$ best are generated.
+    \item The assignment formulation (\cite{garcia_2018_pmbm}): a cost matrix with one row per measurement, a block of existing tracks and a diagonal block of new Bernoullis, with $-\infty$ (infeasible) outside the gates and off the diagonal. Costs are normalized by the missed-detection weights, so ``no measurement'' is implicit.
+    \item $k$-best assignments with Murty's method \cite{Murty}, run once per prior global hypothesis, with a budget proportional to the prior's weight.
+    \item Cost: about $k \cdot n^3$ per prior hypothesis, so large clusters are expensive (link to Section~\ref{sec:complexity}). Alternative: Gibbs sampling \cite{gibbs_glmb}.
+\end{itemize}
+
+% =====================================================================
+\subsection{Track-oriented representation}
+\label{sec:pmbm-representation}
+\label{sec:anatomy-hyp}
+\begin{itemize}
+    \item Builds on the HO/TO discussion in Section~\ref{sec:families}; the PMBM stores its hypotheses track-oriented.
+    \item Each track is a tree of single-target hypotheses, one level per scan; the leaves are its current local hypotheses.
+    \item A global hypothesis is a look-up table: one leaf per track, or none.
+    \item Why it scales: a leaf is stored once and shared by many global hypotheses; pruning a global hypothesis removes the leaves nobody references any more.
+    \item The hybrid: track-oriented storage, hypothesis-oriented generation (Murty per prior global hypothesis, Section~\ref{sec:pmbm-da}), as in \cite{garcia_2018_pmbm} and in this work.
+    \item Redraw the figure below as hypothesis trees.
+    \item Points from the old hypothesis-representation subsection, to reuse:
+    \begin{itemize}
+        \item Only relevant when several hypotheses are kept.
+        \item When several hypotheses are kept, they can be stored in two ways. The distinction is mainly important for implementation.
+        \item In a hypothesis-oriented representation each global hypothesis carries its own complete set of tracks.
+        \item In a track-oriented representation each potential target keeps a tree of single-target hypotheses, and a global hypothesis is only a look-up of one leaf per target.
+        \item Explain how track-oriented storage works and why it scales better. And how it improves pruning as well.
+    \end{itemize}
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering\small
+\begin{minipage}[t]{0.44\textwidth}\centering
+\textbf{Hypothesis-oriented}\par\medskip
+\begin{tabular}{l l}
+\toprule
+Global hyp. & Tracks (each stored in full) \\
+\midrule
+$H_1$ & $\tau_1^{a},\ \tau_2^{a}$ \\
+$H_2$ & $\tau_1^{b},\ \tau_2^{a}$ \\
+$H_3$ & $\tau_1^{a},\ \tau_2^{b},\ \tau_3^{a}$ \\
+\bottomrule
+\end{tabular}\par\medskip
+\textit{e.g.\ Reid's MHT, $\delta$-GLMB}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.52\textwidth}\centering
+\textbf{Track-oriented}\par\medskip
+\begin{tabular}{l l @{\qquad} l c c c}
+\toprule
+Target & Leaves & Global hyp. & $1$ & $2$ & $3$ \\
+\midrule
+$1$ & $\tau_1^{a},\tau_1^{b}$ & $H_1$ & $a$ & $a$ & -- \\
+$2$ & $\tau_2^{a},\tau_2^{b}$ & $H_2$ & $b$ & $a$ & -- \\
+$3$ & $\tau_3^{a}$            & $H_3$ & $a$ & $b$ & $a$ \\
+\bottomrule
+\end{tabular}\par\medskip
+\textit{e.g.\ track-oriented MHT, PMBM}
+\end{minipage}
+\caption{Two ways to store the same three global hypotheses. Left: each hypothesis holds full copies of its tracks. Right: single-target hypotheses are stored once per target, and global hypotheses are index tuples into them. \TODO{Optionally redraw as hypothesis trees.}}
+\label{fig:hyprep}
+\end{figure}
+
+% =====================================================================
+\subsection{PMBM reduction}
+\label{sec:pmbm-reduction}
+\begin{itemize}
+    \item Gating (introduced in Section~\ref{sec:anatomy}): Mahalanobis gate, gate probability $P_G$, and what is lost by ignoring it.
+    \item Pruning: remove global hypotheses whose weight is below a threshold.
+    \item Capping: keep at most $N_h$ global hypotheses.
+    \item Bernoulli pruning: remove Bernoullis with existence probability below a threshold.
+    \item N-scan pruning versus limiting the tree depth (the latter forgets history without forcing a decision).
+    \item Recycling \cite{williams_pmbm_2015}: Bernoullis with low existence are approximated as Poisson components. Mass is moved, not lost, and the number of Bernoullis and hypotheses falls.
+    \item Poisson intensity: prune small components; merge similar components (mixture reduction).
+    \item Moment matching of new Bernoullis (already in Section~\ref{sec:pmbm}) is also a reduction; refer back to it.
+\end{itemize}
+
+% =====================================================================
+\subsection{Clustering}
+\label{sec:pmbm-clustering}
+\begin{itemize}
+    \item Given the gates, tracks that share no measurement are independent: the MBM factorizes into a product of per-cluster MBMs, each with its own list of global hypotheses. The Poisson intensity is shared.
+    \item Exact given the gating; only the truncation of each list is an approximation.
+    \item Benefit: one short hypothesis list per cluster instead of one list over the product of all clusters; capping applies per cluster.
+    \item Merge: clusters that gate a common measurement form one group, whose hypothesis list is the product of the clusters' lists.
+    \item Split: when tracks no longer share a measurement in their histories, they become independent again (Kurien's rule).
+    \item The concrete merge and split rules of this work, and their approximations, are in the method chapter.
+\end{itemize}
+
+% =====================================================================
+\subsection{Estimation}
+\label{sec:pmbm-estimation}
+\begin{itemize}
+    \item The usual estimator: take the best global hypothesis and report the Bernoullis with existence probability above a threshold (\cite{garcia_2018_pmbm}).
+    \item Alternatives: estimators based on the MAP cardinality, or on existence-weighted (marginal) probabilities.
+    \item Track identity is the root of the tree. A trajectory is stitched from per-scan estimates, so a switch of the best hypothesis can create track switches.
+    \item Trajectory PMBM as an alternative: one sentence, further work.
 \end{itemize}

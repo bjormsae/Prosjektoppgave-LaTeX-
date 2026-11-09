@@ -1,2 +1,54 @@
 \section{Introduction}
-A great introduction should be written after the report is finished.
+\label{sec:introduction}
+
+\subsection{Motivation}
+\label{sec:motivation}
+\begin{itemize}
+    \item Wide-area maritime surveillance: keeping a picture of vessel traffic over areas far larger than any coastal radar covers.
+    \item Satellite-borne sensors (SAR, NRD, EO) cover such areas, but give position-only detections, with clutter, partial coverage per pass and long revisit times.
+    \item AIS is cooperative and does not cover every vessel, which is why non-cooperative sensors and a tracker that combines their detections over time are needed. Here AIS is used as ground truth.
+    \item Tracking (not just detecting) is needed to get identities, trajectories and a vessel count over time.
+    \item This report is a specialization project that lays the groundwork for a Master's thesis in the same setting.
+\end{itemize}
+
+\subsection{Setting and scope}
+\label{sec:scope}
+\begin{itemize}
+    \item One table, two columns: \emph{target setting} (the thesis) and \emph{this project}. Rows:
+    \begin{itemize}
+        \item Targets: point targets (vessels), position-only detections, no appearance features. Same in this project.
+        \item Sensors: heterogeneous, asynchronous satellite sensors (SAR with clutter, NRD with per-measurement $R$ and almost no clutter, EO with constant $R$). This project: one simulated EO sensor, constant $R$ and $P_{\mathrm{D}}$.
+        \item Revisit time: tens of minutes to hours. This project: 60--900~s.
+        \item Area and density: large areas, many vessels, locally sparse. This project: up to 100~km radius, about 400 vessels.
+        \item Coverage: partial per pass ($P_{\mathrm{D}}(x)=0$ outside the footprint). This project: static circular field of view, constant $P_{\mathrm{D}}$.
+        \item Geometry: Earth curvature matters over long distances. This project: n-vector prediction and gating implemented.
+        \item Motion: maneuvers over long intervals (e.g.\ ferries). This project: constant velocity only.
+        \item Ground truth: AIS, interpolated to the scan times. Same in this project.
+    \end{itemize}
+    \item Out of scope, one sentence each: track-before-detect, extended objects, appearance/re-ID, end-to-end learned trackers, AIS as a sensor.
+    \item Keep this subsection to about one page; Chapter~\ref{sec:mtt} starts from it.
+\end{itemize}
+
+\subsection{Problem statement and research questions}
+\label{sec:rq}
+\begin{itemize}
+    \item Overall aim: a PMBM tracker that can be built on in the thesis for wide-area maritime tracking from satellite-type sensors.
+    \item RQ1 (scale): Which reductions does a track-oriented PMBM need to run on realistic maritime scenes (hundreds of vessels, about 100~km radius, clutter up to $10^{-7}$ per m$^2$), and what do they cost in accuracy?
+    \item RQ2 (geometry): Does exact spherical geometry (n-vector prediction and gating, \cite{b_gade_2024}) change tracking performance, and for which areas and revisit times should it be expected to?
+    \item RQ3 (limits): Where, and why, does the resulting tracker fail as the revisit time grows towards satellite values?
+\end{itemize}
+
+\subsection{Contributions}
+\label{sec:contributions}
+\begin{itemize}
+    \item A measurement simulator with real AIS tracks as ground truth, measurements and uniform clutter on the sphere.
+    \item Integration of n-vector geometry into an existing PMBM implementation, including the transport of velocity and covariance along the great circle that \cite{b_gade_2024} leaves out.
+    \item Clustering and recycling that make the PMBM run at about 400 vessels and realistic clutter.
+    \item An evaluation of accuracy and run time against scale, clutter and revisit time, which identifies the limits that the thesis must address.
+\end{itemize}
+
+\subsection{Outline}
+\label{sec:outline}
+\begin{itemize}
+    \item One sentence per chapter. Write last.
+\end{itemize}
