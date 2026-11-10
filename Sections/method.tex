@@ -6,6 +6,8 @@
     \item The process model moved to Section~\ref{sec:model-this-work}; the sensor models moved to Chapter~\ref{sec:simulator}.
 \end{itemize}
 
+For this project, I chose to build upon an existing tracker and not develop one from scratch. The chosen tracker is the AIS-IMM-PMBM filter from \cite{ais_imm_pmbm}. It was chosen because it is written in Python and already part of the Autosit project \cite{autosit}.
+
 % =====================================================================
 \subsection{Starting point}
 \label{sec:impl-start}
@@ -17,6 +19,14 @@
     \item Initial testing showed that the existing implementation would not scale up to the required size for real maritime surveillance. Clustering and gating needed to be implemented.
     \end{itemize}
 \end{itemize}
+
+The AIS-IMM-PMBM implementation was built to fuse AIS data with radar or lidar measurements. It also uses the IMM framework to better predict maneuvering vessels. We will drop both of these additions and use the bare PMBM filter in this project. AIS is dropped because it is used as ground truth in the measurement simulator and IMM is dropped for to simplify the system. Implementing an exact CT model prediction using N-vector would also have involved deriving these equations.
+\medskip
+
+The stock PMBM filter uses a HO-TO-hybrid formulation. Bernoullis form track trees and weights are cumulatively added down the tree. A global hypothesis is a list of references to Bernoulli leaf nodes in the track trees. At most one leaf node per track tree can be selected within a global hypothesis. The track tree depth is capped at $D_{max}$, so if the limit is reached, the children of the root node are removed and the grandchildren attached instead. Data association is handled by Murtys k-best assignment algorithm.
+\medskip
+
+While valuable as a working starting point, initial testing showed that the implementation would not scale very well. The PMBM was intended for small research examples, something which became apparent when the tracker crashed beyond about 40 measurements per scan. This was simply due to storing indexes as eight bit integers and thus easily fixable, but it nonetheless shows the intended scale of the implementation.
 
 % =====================================================================
 \subsection{Deviations from the standard PMBM}

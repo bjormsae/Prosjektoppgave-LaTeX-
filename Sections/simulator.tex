@@ -1,25 +1,26 @@
 \section{Simulation environment}
 \label{sec:simulator}
-\begin{itemize}
-    \item Role: generate measurements with known truth, so the tracker can be evaluated. Listed as a contribution in Section~\ref{sec:contributions}.
-    \item Builds on Chapter~\ref{sec:nvector}: positions are n-vectors, and noise is drawn in the local North-East frame at the true position.
-    \item Reproducibility: fixed seed, the same Earth radius in simulator, tracker and metric.
-\end{itemize}
+
+To evaluate the performance of a tracker implementation, ground truth is needed. Ground truth cannot be used for measurements directly, so a simulator is also needed. This chapter covers the development of a measurement simulator using historical AIS-data as ground truth. The simulator supports non-regular time interpolation, represents measurements as N-vectors and generates uniform clutter. Three measurement models have been developed (\autoref{sec:sim-sensors}), but only a position measurement with homogeneous variance have been tested in this project. The simulator can be seeded for reproducibility. 
+
 
 % =====================================================================
 \subsection{Overview}
 \label{sec:sim-overview}
-\begin{itemize}
-    \item One figure of the pipeline: AIS data $\rightarrow$ cleaned and interpolated truth $\rightarrow$ sensor (field of view, detection, noise) $\rightarrow$ measurements plus clutter $\rightarrow$ tracker.
-    \item The notes below are from the old method chapter.
-\end{itemize}
 
-\begin{itemize}
-    \item Using historic AIS-data as ground truth. Downloaded from Kystverket. Used linear interpolation between data points to achieve continuous time sampling. Removed velocity spikes to also include velocity in the "ground truth" (needed for accurate SAR sampling).
-    \item Added SAR, NRD and EO measurements to be Gaussian in the local North-East frame. Sampling is done by adding the zero mean Gaussian to the sampled N-vector.
-    \item Added uniform clutter to the simulator.
-    \item The sensor area is defined by a circle with center N-vector and measurement radius. This is done because the within sensor-checks become trivial dot products with N-vectors.
-\end{itemize}
+The following section is an overview of the simulator workflow. It takes downloaded historical AIS data and outputs a sequence of measurements, including clutter. This is illustrated in \autoref{fig:simulator_overview}, which demonstrates the flow using a simple example.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{Images/fig2_storyboard.pdf}
+    \caption{Overview of the simulator flow using a simple toy example. Gray panels signal operations that are done once per scenario, while white panels are done for every timestep $t_k$.}
+    \label{fig:simulator_overview}
+\end{figure}
+
+Part $a$ and $b$ in \autoref{fig:simulator_overview} is the generation of ground truth for a given scenario. It consists of first cropping AIS from the entire Norwegian waters to the area of interest, then removing outliers. The outlier removal is simple, just consisting of removing points which would result in velocities greater than $30 m/s$. The cleanup removes the worst noise and enables velocity to be returned alongside position. After cropping and outlier removal, points are linearly interpolated between. Velocity is assumed constant and found by dividing distance between points by time between the reports. Positions and velocities are then sampled at arbitrary intervals and returned for all vessels in the area of interest. Positions are N-vectors while velocities are defined in the local North-East frame
+\medskip
+
+Following the rest of \autoref{fig:simulator_overview}, we do the following for each set of sampled points at $t_k$. $(c)$, Vessels outside the sensor field of view are dropped. They cannot generate measurements at this time. $(d)$, each vessel within the FOV generates a measurement with probability $\PD$. If a vessel generates a measurement it is Gaussian in the local North-East frame with variance $\sigma$. $(e)$, uniform clutter is generated within the FOV. The number of clutter points is governed by the FOV area and the clutter intensity. The points are generated in such a way that they are uniform on the sphere, see \autoref{sec:clutter_sphere}. $(f)$, measurements and clutter are shuffled by the simulator such that the tracker does not know which measurements are from vessels. The final output is then a set of N-vectors, corresponding to measurements, for each timestep $t_k$.
 
 % =====================================================================
 \subsection{Ground truth from AIS}
@@ -34,6 +35,8 @@
 
 % =====================================================================
 \subsection{Sensor models}
+Explain why the FOV of all measurement models are circular.
+
 \label{sec:sim-sensors}
 \begin{itemize}
     \item EO first and in full: it is the only sensor used in the experiments. Constant isotropic noise, $\sigma = 300$~m per axis, $\PD = 0.9$, static circular field of view. \TODO{Justify $\sigma = 300$~m.}
@@ -102,6 +105,8 @@ Where $\mathbf{R}_i$ is the measurement noise covariance matrix, which is indivi
 
 % =====================================================================
 \subsection{Clutter on a sphere}
+\label{sec:clutter_sphere}
+
 A standard clutter model used for target tracking is the uniform Poisson clutter model. It is parameterized by the clutter intensity $\lambda_c$, which is the expected number of clutter measurements per unit area/volume. Each clutter measurement is independent, and uniformly distributed within the measurement area. In a rectangular measurement area the generation of a clutter measurement is trivial.
 
 \begin{equation*}
