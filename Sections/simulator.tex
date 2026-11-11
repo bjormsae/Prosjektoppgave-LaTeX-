@@ -2,7 +2,9 @@
 \label{sec:simulator}
 
 To evaluate the performance of a tracker implementation, ground truth is needed. Ground truth cannot be used for measurements directly, so a simulator is also needed. This chapter covers the development of a measurement simulator using historical AIS-data as ground truth. The simulator supports non-regular time interpolation, represents measurements as N-vectors and generates uniform clutter. Three measurement models have been developed (\autoref{sec:sim-sensors}), but only a position measurement with homogeneous variance have been tested in this project. The simulator can be seeded for reproducibility. 
+\medskip
 
+\autoref{sec:sim-overview} is an overview of the simulator and covers how it generates measurements and clutter from historical AIS data. \autoref{sec:sim-truth} covers the dataset used in the project and \autoref{sec:sim-sensors} covers the sensor models developed. \autoref{sec:clutter_sphere} then goes into detail of how uniform clutter can be generated on a spherical cap.
 
 % =====================================================================
 \subsection{Overview}
@@ -17,7 +19,7 @@ The following section is an overview of the simulator workflow. It takes downloa
     \label{fig:simulator_overview}
 \end{figure}
 
-Part $a$ and $b$ in \autoref{fig:simulator_overview} is the generation of ground truth for a given scenario. It consists of first cropping AIS from the entire Norwegian waters to the area of interest, then removing outliers. The outlier removal is simple, just consisting of removing points which would result in velocities greater than $30 m/s$. The cleanup removes the worst noise and enables velocity to be returned alongside position. After cropping and outlier removal, points are linearly interpolated between. Velocity is assumed constant and found by dividing distance between points by time between the reports. Positions and velocities are then sampled at arbitrary intervals and returned for all vessels in the area of interest. Positions are N-vectors while velocities are defined in the local North-East frame
+Part $(a)$ and $(b)$ in \autoref{fig:simulator_overview} is the generation of ground truth for a given scenario. It consists of first cropping AIS from the entire Norwegian waters to the area of interest, then removing outliers. The outlier removal is simple, just consisting of removing points which would result in velocities greater than $30 m/s$. The cleanup removes the worst noise and enables velocity to be returned alongside position. After cropping and outlier removal, points are linearly interpolated between. Velocity is assumed constant and found by dividing distance between points by time between the reports. Positions and velocities are then sampled at arbitrary intervals and returned for all vessels in the area of interest. Positions are N-vectors while velocities are defined in the local North-East frame
 \medskip
 
 Looking back at the rest of \autoref{fig:simulator_overview}, we do the following for each set of sampled points at $t_k$. $(c)$, Vessels outside the sensor field of view are dropped. They cannot generate measurements at this time. $(d)$, each vessel within the FOV generates a measurement with probability $\PD$. If a vessel generates a measurement it is Gaussian in the local North-East frame with variance $\sigma$. $(e)$, uniform clutter is generated within the FOV. The number of clutter points is governed by the FOV area and the clutter intensity. The points are generated in such a way that they are uniform on the sphere, see \autoref{sec:clutter_sphere}. $(f)$, measurements and clutter are shuffled by the simulator such that the tracker does not know which measurements are from vessels. The final output is then a set of N-vectors, corresponding to measurements, for each timestep $t_k$.
@@ -28,26 +30,14 @@ Looking back at the rest of \autoref{fig:simulator_overview}, we do the followin
 
 The data used as ground truth is historical AIS. It is downloaded from Kystverkets historical AIS database \cite{kystverket}. Minimal filtering is applied to the data, meaning it is not specifically curated for tracking. A consequence is then that the data includes a lot of stationary vessels. In scenarios centered around big ports, around 80\,\% of vessels can be stationary, leading to a realistic, but perhaps unusual scenario in terms of tracking literature. These vessels are usually also quite close in proximity, making association difficult in noisy environments. 
 
-\begin{itemize}
-    \item Data: AIS from the Norwegian Coastal Administration (Kystverket): the Vestlandet files (2026-08-01) and the national file (2025-09-25). Class A and B reports from terrestrial and satellite sources; LRIT dropped.
-    \item Cleaning: sentinel values scrubbed, duplicates merged, spikes removed (velocity spikes too, since the truth includes velocity).
-    \item Linear interpolation to the scan times. Gaps up to 368~s are bridged by straight lines; the truth is therefore not exactly constant velocity or great circle.
-    \item AIS is ground truth only, not a sensor.
-    \item The truth at each scan is the vessels inside the field of view. About 80\,\% of the vessels in the proof-of-concept area are stationary, and 39\,\% lie within 100~m of another vessel.
-\end{itemize}
-
 % =====================================================================
 \subsection{Sensor models}
-Explain why the FOV of all measurement models are circular.
-
 \label{sec:sim-sensors}
-\begin{itemize}
-    \item EO first and in full: it is the only sensor used in the experiments. Constant isotropic noise, $\sigma = 300$~m per axis, $\PD = 0.9$, static circular field of view. \TODO{Justify $\sigma = 300$~m.}
-    \item Noise is drawn in the local azimuthal-equidistant North-East frame at the true position, so there is no projection mismatch between simulator and tracker.
-    \item The field of view is a circle around a centre n-vector; the inside test is a dot product.
-    \item SAR and NRD short: implemented in the simulator, not evaluated here, used in the thesis. Keep the azimuth-shift discussion compact; it motivates a state-dependent $R$ (further work).
-    \item Reorder: EO, then SAR, then NRD.
-\end{itemize}
+
+Three relevant sensor models were developed for the simulator: EO, SAR and NRD. As per the problem formulation, all sensors have abstracted away the detector, leaving three sensors measuring position. The difference between the sensors then lie in the noise and clutter assumptions of the models. EO is modelled as having constant noise, while SAR noise increases with target velocity and NRD noise with distance from the measurement center. For simplicity, only EO is used when evaluating tracker performance. Nonetheless, all models and their modelling assumptions are listed in the subsections below.
+\medskip
+
+All sensors are also modelled to have spherical field of views. This is done simply because of N-vector geometry. The field of view is defined by an N-vector center and a radius. Determining which targets are inside or outside the FOV is then simply a dot product between N-vectors.
 
 \subsubsection{Electro-optical (EO) measurements}
 As with both SAR and NRD, Electro-optical detectors are complicated and best abstracted away. Again, we are left with a direct position measurement on the form:
@@ -89,9 +79,6 @@ Where $\mathbf{R}$ is the measurement noise covariance matrix.
 \medskip
 
 The last approach is to just increase the measurement noise, but keep it constant for all measurements. This keeps the filter linear and is in many ways the ``safest'', but it will reduce the value of measurements where the vessel is at low velocity.
-\medskip
-
-It is also worth noting that SAR detectors could possibly return more information than just positions, but that will not be considered in this report.
 
 \subsubsection{Navigation Radar Detector (NRD)}
 NRD is a satellite borne detector, which tracks and locates the radar signals from civilian navigation radars \cite{nrd_ffi}. For tracking this means that the detector can be abstracted away, leaving a pure position measurement. What is special about NRD is that it can report the uncertainty of the measurement alongside each measurement. This means $R$ can be individual to each measurement. In general, the uncertainty increases radially around the center point of our measurement. This is useful for both simulation and filtering since the uncertainty is dependent on the measurement position and not the state position. One strength with NRD is that since it only detects radar signals, false positives are almost non-existent. This means that the measurements can be assumed to have a clutter intensity of almost zero. The measurement model, stated for completeness is then:
@@ -154,18 +141,14 @@ We can parameterize the points on the spherical cap by the cap axis (N-vector), 
 \end{align*}
 
 The uniform point can then be returned as an N-vector by following Example 8 in \parencite{ffi_nvector}. Note that since the points sampled are random and uniform, the result is invariant to rotation about the cap axis. This means that it is not necessary to specify $\psi$ and $\theta$ in the correct East - North frame.
-\begin{itemize}
-    \item Moved here from the geometry chapter: the theory is short and exists to generate clutter. The tracker only needs the density $\lambda^c$ (Section~\ref{sec:formulation}).
-    \item The clutter densities used: $10^{-9}$, $10^{-8}$ and $10^{-7}$ per m$^2$ (0.45 to 45 clutter points per scan at 12~km radius).
-\end{itemize}
 
 % =====================================================================
-\subsection{Scenarios}
-\label{sec:sim-scenarios}
-\begin{itemize}
-    \item One table of the windows used, with centre, radius, start, scans, scan interval, vessels in view and share moving.
-    \item Proof-of-concept window: 59.09$^\circ$\,N, 5.45$^\circ$\,E, radius 12~km, 60 scans of 60~s, 14--19 vessels.
-    \item Scale windows: same centre, radius 12--100~km, 30 scans, 17--398 vessels.
-    \item Named scenarios on the national data (fjords, open water, shipping lanes), and how they were selected (enough vessels, no long AIS gaps for moving vessels). Use only the ones the results use.
-    \item One map figure of a scenario with truth and measurements.
-\end{itemize}
+%\subsection{Scenarios}
+%\label{sec:sim-scenarios}
+%\begin{itemize}
+%    \item One table of the windows used, with centre, radius, start, scans, scan interval, vessels in view and share moving.
+%    \item Proof-of-concept window: 59.09$^\circ$\,N, 5.45$^\circ$\,E, radius 12~km, 60 scans of 60~s, 14--19 vessels.
+%    \item Scale windows: same centre, radius 12--100~km, 30 scans, 17--398 vessels.
+%    \item Named scenarios on the national data (fjords, open water, shipping lanes), and how they were selected (enough vessels, no long AIS gaps for moving vessels). Use only the ones the results use.
+%    \item One map figure of a scenario with truth and measurements.
+%\end{itemize}
