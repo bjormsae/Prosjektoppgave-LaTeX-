@@ -66,38 +66,57 @@ While valuable as a working starting point, initial testing showed that the impl
 % =====================================================================
 \subsection{Clustering}
 \label{sec:impl-clustering}
-\begin{itemize}
-    \item The concrete rules: group clusters that gate a common Poisson-gated measurement; product of hypothesis lists, truncated; Murty and pruning per group; split by Kurien's rule.
-    \item Approximations: truncation; conflicts older than the tree depth (10 scans) are forgotten.
-    \item A split based on mutual information was tried and dropped: the truncation itself creates spurious dependence, so clusters never split.
-    \item With everything in one cluster it reproduces the original tracker exactly (tested).
-    \item From the old notes:
-    \begin{itemize}
-    \item Clustering merge: Whose children use the same Poisson-gated measurement form one group. The prior hypotheses are the product of their lists, truncated to the best N hypotheses,
-    \item Clustering split: tracks whose surviving leaves' histories share no measurement go to separate clusters, each with the marginal of the hypothesis list (Kurien's MHT rule).
-    \end{itemize}
-\end{itemize}
 
-Each cluster runs its own PMBM filter independently, with probabilities normalized within each cluster. There are two immediate benefits from using clustering for tracking. We don't need as many hypotheses per cluster and the association becomes far cheaper. 
+Each cluster runs its own PMBM filter independently, with probabilities normalized within each cluster. As discussed earlier, there are two immediate benefits from using clustering for tracking. We don't need as many hypotheses per cluster and the association becomes far cheaper. The two operations concerning clusters are merging and splitting, where the latter is the difficult part. This section describes in detail how these two operations are implemented in the PMBM. 
 \medskip
 
-\paragraph{Merging}
-Clusters are merged whenever they gate the same measurement. A cluster gating a measurement means that at least one leaf node in a track tree gates the measurement. Conditioned on the previous cycle's gates, clusters are independent. This means that merging them is simply a Cartesian product over each cluster's hypotheses. Each cluster contains a list of global hypotheses and their respective weights. Each global hypothesis points to at most one leaf node in each track tree. When clusters are merged, you simply multiply the weights (add the log weights) and make this a new global hypothesis with the combined leaf nodes from the track trees. Assuming each cluster has $H_{max}$ global hypotheses, the combined group has $H_{max}^k$ hypotheses, where $k$ is the number of clusters being merged. These are then pruned down to at most $H_{max}$ before running the association. Merging of multiple clusters is done one by one, and pruning is done after each cluster is merged. Thus, at most $H_{max}^2$ global hypotheses exist at one given moment.
+For this section we define the term group. It is a temporary entity, which exists only through the data association step. A group consists of all hypotheses which need to be considered in the same data association. Clusters become part of the same group if they gate the same measurement. A cluster gating a measurement means that at least one leaf node in a track tree gates the measurement. This effect is transitive, as seen in \autoref{fig:clustering_chaining}. A consequence is then that clusters nowhere near each other can be connected through intermediate clusters. Cluster borders being shown as ellipsoids in \autoref{fig:clustering_chaining} is a simplification, as it is actually the union of leaf node gates over all track trees part of the cluster.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/fig11_chaining.pdf}
+    \caption{Illustrative figure showing the formation of three groups: $G_1$, $G_2$ and $G_3$. Clusters are linked through gating the same measurements (solid black $X$), but also other gated measurements (gray $X$) must be part of the group.}
+    \label{fig:clustering_chaining}
+\end{figure}
+
+\subsubsection{Merging}
+Whenever multiple clusters enter the same group, they are merged. Conditioned on the previous cycle's gates, clusters are independent. This means that merging them is simply a Cartesian product over each cluster's hypotheses. Each cluster contains a list of global hypotheses and their respective weights. When clusters are merged, you simply multiply the weights (add the log weights) and make this a new global hypothesis with the combined leaf nodes from the track trees. Assuming each cluster has $H_{max}$ global hypotheses, the combined group has $H_{max}^k$ hypotheses, where $k$ is the number of clusters being merged. These are then pruned down to at most $H_{max}$ before running the association. Merging of multiple clusters is done one by one, and pruning is done after each cluster is merged. Thus, at most $H_{max}^2$ global hypotheses exist at one given moment. The merging of global hypotheses from two clusters is shown in \autoref{fig:clustering_merge}.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/fig4_hypothesis_product.pdf}
+    \caption{Merging of two clusters $A$ and $B$. $H_{max}$ is set to four, so only the four most likely combined hypotheses are kept. The weights are renormalized after capping.}
+    \label{fig:clustering_merge}
+\end{figure}
+
+\subsubsection{Data association and reduction}
+Prior to splitting, data association is performed, and some reductions are made to the posterior. This is done to only carry the most probable hypotheses forward, but also serves a second purpose. By removing low probability components, we reduce the chance of track entanglement, enabling more efficient cluster splitting. Including the association itself, four approximations are made:
+
+\begin{enumerate}%[label=(\roman*)]
+    \item Murtys algorithm finds the most probable associations, capping the total hypotheses at $H_{max}$.
+    \item Leaves which no hypotheses uses are removed. The resulting parent nodes without children are then removed recursively up to the root.
+    \item Leaves with existence probability $r < 1^{-6}$ are also removed.
+    \item The track tree depth is capped at $D_{max}$. The roots children are removed, attaching the grandchildren instead whenever the cap is reached.
+\end{enumerate}
+
+\subsubsection{Splitting}
+After association, we are left with a single big group where unlikely posterior components have been removed. The goal is now to identify which tracks within the group are entangled and which ones are not. Tracks can then be formed into independent clusters by the same idea used in the merging (\autoref{fig:clustering_chaining}). 
 \medskip
 
-Every hypothesis that needs to be considered for data association is a group. This incudes the merged clusters and new Bernoullis. The group only exist as an entity through data association and is reformed into clusters after the association step.
+Just as with the merging, tracks are only entangled by measurement conflicts. The only difference is that we need to consider the entire measurement history when splitting. Each Bernoulli in the track tree is either tied to a measurement or a misdetection. A measurement is hashed by its location and timestamp such that a specific number can tell us if two Bernoullis have used the same measurement. This way, we can say that two track trees are entangled if any Bernoulli in track tree one uses the same measurement as a Bernoulli in track tree 2. Just as with merging, the reformation of clusters is also transitive, as seen in \autoref{fig:clustering_split}. The figure also captures how tracks can be connected without having recent measurement conflict.
 \medskip
 
-\paragraph{Splitting}
-Splitting of clusters is not done explicitly. Rather, after data association is done, new clusters are formed based on measurement history. Each measurement is hashed by its timestamp and location, meaning each measurement is uniquely stored. 
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Images/fig12_history_chaining.pdf}
+    \caption{Three track trees connected by measurement history. All three go into the same cluster even though they don't all share a common measurement.}
+    \label{fig:clustering_split}
+\end{figure}
 
-\begin{itemize}
-    \item Clusters only need to be rebuilt per group. Since groups don't share history with each other, they cannot form clusters across one another.
-    \item Before splitting, four things happen. These are approximations, which makes the algorithm feasible, but they are small approximations if you think about it. After the association step we again keep at most the $H_{max}$ best hypotheses. We then remove leaves that no hypotheses uses, going upwards and removing parents with no children. We also remove every leaf with $r < 1^{-6}$ since it is very unlikely to exist. Finally, we cap the tree depth at $D_{max}$, removing the roots children and attaching the grandchildren instead.
-    \item Clusters are reformed based on measurement history. If tracks contest the same measurement in the tree, they form a cluster. This procedure is a union over the group, meaning track $A$ and $B$ can be in the same cluster even though they don't share measurement history. This happens if both $A$ and $B$ share a measurement with another track $C$. 
-    \item The maximum tree depth is what allows the splitting to work efficiently. 
-\end{itemize}
+Two main reasons, make this cluster splitting scheme powerful. The first is that the splitting is exact given the previous reductions. No approximations happen in the splitting itself, meaning the splitting will be fair as long as the reductions are fair. This leads directly to the other strength of the splitting rule. The average cluster size and aggressiveness of cluster splitting is tunable, based on the approximations done before it. Specifically, adjusting the track tree depth can tune how long the tracker remember past measurement conflicts before considering them solved.
+\medskip
 
+Marginalization, how to do it?
 % =====================================================================
 \subsection{Recycling}
 \label{sec:impl-recycling}
