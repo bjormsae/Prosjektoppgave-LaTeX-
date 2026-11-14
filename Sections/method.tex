@@ -92,7 +92,7 @@ Whenever multiple clusters enter the same group, they are merged. Conditioned on
 \subsubsection{Data association and reduction}
 Prior to splitting, data association is performed, and some reductions are made to the posterior. This is done to only carry the most probable hypotheses forward, but also serves a second purpose. By removing low probability components, we reduce the chance of track entanglement, enabling more efficient cluster splitting. Including the association itself, four approximations are made:
 
-\begin{enumerate}%[label=(\roman*)]
+\begin{enumerate}
     \item Murtys algorithm finds the most probable associations, capping the total hypotheses at $H_{max}$.
     \item Leaves which no hypotheses uses are removed. The resulting parent nodes without children are then removed recursively up to the root.
     \item Leaves with existence probability $r < 1^{-6}$ are also removed.
@@ -116,7 +116,15 @@ Just as with the merging, tracks are only entangled by measurement conflicts. Th
 Two main reasons, make this cluster splitting scheme powerful. The first is that the splitting is exact given the previous reductions. No approximations happen in the splitting itself, meaning the splitting will be fair as long as the reductions are fair. This leads directly to the other strength of the splitting rule. The average cluster size and aggressiveness of cluster splitting is tunable, based on the approximations done before it. Specifically, adjusting the track tree depth can tune how long the tracker remember past measurement conflicts before considering them solved.
 \medskip
 
-Marginalization, how to do it?
+To complete the reformation of clusters, the global hypotheses need to be marginalized over the new clusters. This is the inverse of the merging from earlier, and illustrated in \autoref{fig:clustering_split_hyp}. For simplicity, the figure only splits two independent tracks, but in general you just sum over tracks independent to each given cluster.
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.5\textwidth]{Images/fig7_split_marginal_v2.pdf}
+    \caption{Splitting the joint global hypotheses of two tracks $T_a$ and $T_b$ into independent hypotheses. Each cell in the matrix corresponds to a global hypothesis. Sum over the leaves of the independent track to obtain the marginal hypothesis.}
+    \label{fig:clustering_split_hyp}
+\end{figure}
+
 % =====================================================================
 \subsection{Recycling}
 \label{sec:impl-recycling}
