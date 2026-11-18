@@ -95,7 +95,7 @@ Prior to splitting, data association is performed, and some reductions are made 
 \begin{enumerate}
     \item Murtys algorithm finds the most probable associations, capping the total hypotheses at $H_{max}$.
     \item Leaves which no hypotheses uses are removed. The resulting parent nodes without children are then removed recursively up to the root.
-    \item Leaves with existence probability $r < 1^{-6}$ are also removed.
+    \item Leaves with existence probability $r < 10^{-6}$ are also removed.
     \item The track tree depth is capped at $D_{max}$. The roots children are removed, attaching the grandchildren instead whenever the cap is reached.
 \end{enumerate}
 

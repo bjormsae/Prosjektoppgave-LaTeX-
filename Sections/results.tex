@@ -63,3 +63,8 @@
     \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
     \end{itemize}
 \end{itemize}
+
+\subsection{Notes}
+\begin{itemize}
+    \item There is a natural reason why the N-vector geometry does not improve tracking performance. N-vector can make the CV-model exact on the sphere. One would expect the performance increase to be greatest over large distances, where curvature matters. The problem is that when distance is increased, prediction time is also increased and thereby uncertainty as well. Any measurement that is the prediction is associated to will therefore pull the prediction very close (as by the Kalman gain). Another fundamental problem is that using the exact N-vector prediction assumes that the CV-model is a good one and that we should strive to use it exact. This assumption is fundamentally flawed, especially when we need large distances for geometry to show up.
+\end{itemize}
