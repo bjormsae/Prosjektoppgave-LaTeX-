@@ -1,67 +1,611 @@
 \section{Results}
 \label{sec:results}
-\begin{itemize}
-    \item One section per research question. Every number from one frozen commit, stated in Section~\ref{sec:res-setup}.
-\end{itemize}
 
-% =====================================================================
-\subsection{Evaluation setup}
-\label{sec:res-setup}
-\begin{itemize}
-    \item GOSPA \TODO{add Rahmathullah, Garc\'ia-Fern\'andez \& Svensson 2017 to the bib}: definition, $p = 2$, $\alpha = 2$ (splits into localization, missed and false), cut-off $c = 1000$~m $\approx 3.3\sigma$, great-circle distance. Why not MOTA/HOTA.
-    \item Derived numbers: missed and false shares per true vessel-scan, RMSE, run time per scan, largest cluster.
-    \item Truth: vessels inside the field of view. Tracks of vessels that just left count as false.
-    \item Baselines: the original single-list PMBM (``stock''), and the single-plane geometry.
-    \item Seeds, number of scans, commit hash, hardware, parallel runs (timing uncertainty).
-\end{itemize}
+% DRAFT 2026-11-18, as bullets for the author to write out. Every number below comes from the campaign run files at
+% commit b6e1d45 (tag report-freeze), or from the phase profiles in integration/output/profile_bergen_*_filtered.json.
+% Run names here -> campaign names in the code (integration/run_campaign.py): scale runs = study1 (2024 replays:
+% replay/run_points.py on original-2024), phase profiles = study2, moored kept = study5, scene runs = study4a,
+% lane revisit runs = study3a, Mid-coast runs = study3b, time-of-day runs = study4b.
+% Analysis and figure scripts: results_campaign.py, study3b_paired.py and make_views.py (the viewer figures, drawn
+% with integration/viewer.py) in the session scratchpad; to be given a permanent home.
+% Comments marked "cut candidate" are the parts the author expects to shorten first.
 
-% =====================================================================
-\subsection{Geometry (RQ2)}
-\label{sec:res-geometry}
 \begin{itemize}
-    \item Baseline versus n-vector on the proof-of-concept window and the scale windows: same GOSPA, estimates within millimetres.
-    \item The error-budget figure (Section~\ref{sec:nvector-error}), and the effect of leaving out the rotation (Section~\ref{sec:nvector-transport}).
-    \item Run-time cost of the geometry: 1.3--1.7$\times$.
-    \item From the old notes:
+    \item The runs, the windows, the defaults and the scoring: Chapter~\ref{sec:experiments}. Each section below opens with the runs it uses and ends with its finding.
+    \item Order:
     \begin{itemize}
-    \item Implemented N-vector exact spherical CV prediction on an existing PMBM filter implementation. Maybe compare predictions, and argue why better prediction tools are needed for this to be effective. But then, why bother in the first place? Interesting argument. Look into this further.
+        \item scale and run time (RQ1, Section~\ref{sec:res-scale});
+        \item the evaluation itself: moored vessels (Section~\ref{sec:res-moored}), then the lagged estimate (Section~\ref{sec:res-estimates}). From there on, results are given for both estimates, with continuity;
+        \item geometry (RQ2, Section~\ref{sec:res-geometry});
+        \item the limits of the tracker as the scene, the traffic and the revisit time vary (RQ3, Sections~\ref{sec:res-scenes} and~\ref{sec:res-revisit}).
     \end{itemize}
+    \item Every run can be replayed in the viewer (Figures~\ref{fig:res-view-moored}, \ref{fig:res-view-lagged}, \ref{fig:res-view-scenes} and~\ref{fig:res-view-revisit}).
+    \item Interpretation kept short here, taken up in Chapter~\ref{sec:discussion}.
 \end{itemize}
 
 % =====================================================================
 \subsection{Scale (RQ1)}
 \label{sec:res-scale}
+
 \begin{itemize}
-    \item The scale ladder, 12--100~km: run time and accuracy, stock versus clustered, largest cluster.
-    \item Honest reading: at low clutter up to 25~km the stock tracker is as accurate and faster; clustering pays off with clutter and size.
-    \item From the old notes:
+    \item Runs: the scale runs (Table~\ref{tab:exp-runs}), code versions O, S, C and R.
+\end{itemize}
+
+\subsubsection{Run time}
+
+\begin{table}[htbp]
+\centering
+\caption{Scale runs: run time per scan in seconds, mean over 30 scans, one seed. Measurements: mean per scan, clutter included; vessels: mean number in view.}
+\label{tab:res-ladder}
+\small
+\begin{tabular}{r l r r r r r r}
+\toprule
+Radius & Clutter [m$^{-2}$] & Meas. & Vessels & O & S & C & R \\
+\midrule
+12 km & $10^{-9}$ & 20 & 21 & 0.84 & 0.069 & 0.067 & 0.062 \\
+25 km & $10^{-9}$ & 38 & 40 & 1.97 & 0.093 & 0.109 & 0.129 \\
+50 km & $10^{-9}$ & 100 & 102 & 11.8 & 0.380 & 0.251 & 0.316 \\
+100 km & $10^{-9}$ & 204 & 188 & 57.1 & 1.49 & 0.670 & 0.678 \\
+150 km & $10^{-9}$ & 353 & 315 & stopped$^a$ & 6.22 & 1.24 & 1.23 \\
+200 km & $10^{-9}$ & 507 & 425 & not run$^b$ & 15.7 & 1.80 & 1.81 \\
+\addlinespace
+50 km & $10^{-8}$ & 173 & 102 & 35.4 & 1.41 & 1.45 & 0.355 \\
+100 km & $10^{-8}$ & 490 & 188 & memory$^c$ & 25.8 & 5.19$^d$ & 0.951 \\
+50 km & $10^{-7}$ & 880 & 102 & memory$^c$ & stopped$^e$ & stopped$^e$ & 1.29 \\
+100 km & $10^{-7}$ & 3309 & 188 & -- & not run & not run & 4.90 \\
+\bottomrule
+\end{tabular}
+
+\smallskip
+\footnotesize
+$^a$ The second scan was still running after 10~min. $^b$ O is not run at larger radii once it fails to finish at a smaller one. $^c$ Stopped by the operating system for lack of memory during the second scan. $^d$ Median 1.9~s; one scan took 53~s. $^e$ Projected over one hour: S at 118~s per scan after 8 scans, C at 171~s per scan after 6.
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.62\textwidth]{Images/res_scale_time.pdf}
+    \caption{Scale runs: run time per scan against measurements per scan at clutter $10^{-9}$~m$^{-2}$, radius 12--200~km. Both axes logarithmic.}
+    \label{fig:res-scale-time}
+\end{figure}
+
+\begin{itemize}
+    \item Result: Table~\ref{tab:res-ladder}; the growth at low clutter in Figure~\ref{fig:res-scale-time}.
+    \item O to S (speed-ups that leave results unchanged):
     \begin{itemize}
-    \item Implemented clustering and splitting for efficient scaling. Need some concrete results here for how the implementation is better. Also discuss how effective the splitting is and what causes it to fail. 
+        \item 12 times faster at 12~km, 38 times at 100~km;
+        \item same answer: at 50~km and $10^{-8}$~m$^{-2}$ every score of O and S is identical; elsewhere the differences are within the tie-breaking noise of the original code \TODO{ref to the reproducibility fix, Section sec:impl-other};
+        \item O also needs memory: 3.6~GB at its peak at 100~km; at 490 and 880 measurements per scan the operating system stopped it during its second scan \TODO{state the memory figure (about 60~GB) only with a source}.
+    \end{itemize}
+    \item Clustering changes how run time grows, not only its level:
+    \begin{itemize}
+        \item power law, run time per scan against measurements per scan, 50--200~km at $10^{-9}$~m$^{-2}$: exponent 2.3 for S (2.2 for O, from 50 and 100~km only), 1.2 for C, 1.1 for R;
+        \item so the gain from clustering grows with size: none at 12~km, a 15\,\% loss at 25~km, 2.2 times at 100~km, 8.7 times at 200~km;
+        \item 2024 code to shipped tracker: 84 times at 100~km;
+        \item why close to linear (phase profiles): from 12 to 200~km the number of association groups per scan grows from 4 to 236, the largest group only from 22 to 72 tracks (Section~\ref{sec:res-phases}).
+    \end{itemize}
+    \item Recycling:
+    \begin{itemize}
+        \item no difference to run time at $10^{-9}$~m$^{-2}$: C and R agree within noise at every radius;
+        \item with more clutter it makes the tracker usable: at $10^{-8}$~m$^{-2}$ R is 4.1 times faster than C at 50~km, 5.5 times at 100~km;
+        \item at $10^{-7}$~m$^{-2}$ only R finishes: 1.3~s per scan at 50~km, 4.9~s at 100~km with 3300 measurements per scan; S and C stopped at 118 and 171~s per scan.
     \end{itemize}
 \end{itemize}
 
-% =====================================================================
-\subsection{Clutter and recycling (RQ1)}
-\label{sec:res-clutter}
+\subsubsection{Accuracy}
+
+\begin{table}[htbp]
+\centering
+\caption{Scale runs: missed share in percent of the vessel-scans, online estimate, the runs of Table~\ref{tab:res-ladder}. --: no result (stopped or not run).}
+\label{tab:res-missed}
+\small
+\begin{tabular}{r l r r r r}
+\toprule
+Radius & Clutter [m$^{-2}$] & O & S & C & R \\
+\midrule
+12 km & $10^{-9}$ & 6.7 & 6.9 & 8.1 & 6.7 \\
+25 km & $10^{-9}$ & 5.9 & 6.0 & 5.9 & 5.7 \\
+50 km & $10^{-9}$ & 5.0 & 5.1 & 4.7 & 4.3 \\
+100 km & $10^{-9}$ & 8.4 & 8.3 & 3.8 & 3.5 \\
+150 km & $10^{-9}$ & -- & 11.8 & 4.7 & 3.3 \\
+200 km & $10^{-9}$ & -- & 14.9 & 5.5 & 3.8 \\
+\addlinespace
+50 km & $10^{-8}$ & 26.3 & 26.3 & 23.9 & 10.8 \\
+100 km & $10^{-8}$ & -- & 38.6 & 29.7 & 9.3 \\
+50 km & $10^{-7}$ & -- & -- & -- & 46.8 \\
+100 km & $10^{-7}$ & -- & -- & -- & 49.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{itemize}
-    \item Clutter $10^{-9}$, $10^{-8}$ and $10^{-7}$ per m$^2$, with and without recycling; the recycle-threshold sweep.
-    \item Tie to cluster size: low-existence Bernoullis are what link clusters.
-    \item From the old notes:
+    \item The single hypothesis list loses vessels as the scene grows (Table~\ref{tab:res-missed}):
     \begin{itemize}
-    \item Added simple recycling as well. Tie this into the splitting and show concrete results based on maximum cluster size and why this matters a lot. 
+        \item at $10^{-9}$~m$^{-2}$ S misses 5.1\,\% of the vessel-scans at 50~km and 14.9\,\% at 200~km; C and R stay at 3.3--5.5\,\%;
+        \item O misses as many as S (8.4 against 8.3\,\% at 100~km): the loss belongs to the single list, not to the speed-ups;
+        \item false shares alike for all versions (1.9--2.7\,\% from 100~km).
+    \end{itemize}
+    % cut candidate: the age split (could be one sentence)
+    \item Split by how long a vessel has been in view \TODO{this split uses a 1~km nearest-estimate rule, not GOSPA's assignment}:
+    \begin{itemize}
+        \item new vessels confirmed late: at 200~km, for vessels in view 3--5 scans, S misses 77\,\%, C and R 9\,\%;
+        \item established vessels also lost: in view more than 10 scans, S misses 9.6\,\%, C 2.9\,\%, R 1.9\,\%;
+        \item at 50~km all three alike.
+    \end{itemize}
+    \item C, without recycling, keeps nearly all of R's accuracy: the gain comes from clustering.
+    \item Likely reason: the single list holds 100 global hypotheses for the whole scene, so the more tracks it covers, the fewer alternatives per track; each cluster keeps 100 of its own \TODO{a mechanism, not shown; discuss in Chapter~\ref{sec:discussion}}.
+    \item With clutter, recycling also improves accuracy:
+    \begin{itemize}
+        \item at $10^{-8}$~m$^{-2}$ C misses 24--30\,\%, R 9--11\,\%;
+        \item at $10^{-7}$~m$^{-2}$ R finishes but misses about half (47 and 49\,\%), with 19--25\,\% false: the tracker fails to start tracks, not to keep up \TODO{initiation at high clutter is an open decision, method.md s6}.
     \end{itemize}
 \end{itemize}
 
-% =====================================================================
-\subsection{Limits (RQ3)}
-\label{sec:res-limits}
+\subsubsection{Where the time goes}
+\label{sec:res-phases}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{Images/res_phase_shares.pdf}
+    \caption{Phase profiles: share of each phase in a steady-state scan (scans 3--11 of 12), at the points of the scale runs, without recycling, and for the stock code. Right: seconds per scan in the profile, timers included. ``Children'': the updated hypotheses of each track, one per gated measurement and one for a missed detection. ``Poisson'': prediction and gating of the Poisson components and initiation of new Bernoullis. ``Other'': pruning, splitting and gating of the tracks, histories, recycling, merging and grouping.}
+    \label{fig:res-phase-shares}
+\end{figure}
+
 \begin{itemize}
-    \item Revisit sweep (60 to 900~s) on one scene: missed and false shares, GOSPA, run time, largest group, gate radius.
-    \item The three regimes where a scan takes more than 5--10~s: many vessels at short revisit, long revisit, high clutter over a large area. What dominates in each.
-    \item From the supervisor meeting:
+    \item Runs: the phase profiles (Table~\ref{tab:exp-runs}); Figure~\ref{fig:res-phase-shares}.
+    \item Absolute times include the timers, so run time is quoted from the scale runs; the profiles are for the shares.
+    \item At $10^{-9}$~m$^{-2}$ the shares hardly change from 12 to 200~km:
     \begin{itemize}
-    \item Conduct some rigorous testing on when the current implementation fails and why. How far can it predict with still good results. How is the noise level set?
+        \item children 24--29\,\%, track prediction 25--32\,\%, Murty 14--18\,\%, reward matrices 5--8\,\%, Poisson 2--5\,\%, other 12--14\,\%;
+        \item no phase takes over as the scene grows, which matches the near-linear growth;
+        \item the n-vector geometry, called from inside these phases, takes 36--43\,\% of a scan.
     \end{itemize}
+    \item With clutter, Murty and the Poisson part take over. At 100~km and $10^{-7}$~m$^{-2}$: Murty 30\,\%, Poisson 34\,\% (prediction 23\,\%, gating 6.5\,\%, initiation 4.7\,\%), other 9\,\%.
+    \item The Poisson share grows with clutter: 2--5\,\% at $10^{-9}$, 10 and 14\,\% at $10^{-8}$ (50 and 100~km), 26 and 34\,\% at $10^{-7}$~m$^{-2}$.
+    \item The cause is the number of Poisson components, mean per scan: 8--570 at $10^{-9}$, 310 and 1200 at $10^{-8}$, 3500 and 12\,900 at $10^{-7}$~m$^{-2}$.
+    \item Where they come from: recycled Bernoullis, i.e.\ clutter.
+    \begin{itemize}
+        \item Each clutter detection starts a Bernoulli; most end up alone with $r < 0.2$ and are recycled (Section~\ref{sec:impl-recycling}).
+        \item Recycled per scan is about the clutter count: 77 against 80, 301 against 312, 842 against 798, 3096 against 3125 (50/100~km at $10^{-8}$, then at $10^{-7}$).
+        \item Poisson components are never merged or capped, only deleted below $w = 10^{-5}$. An undetected component loses a factor $1 - P_{\mathrm{D}} = 0.1$ per scan, so a recycled one ($w = r < 0.2$) lives at most 5 scans (\texttt{TRACKER.md} R1).
+        \item So the pool holds about four scans of recycled clutter: components over recycled per scan is 4.0--4.2 at every clutter level.
+        \item It is bounded, not a leak. At 100~km and $10^{-7}$~m$^{-2}$: 3223 components at scan 0, 15\,518 at scan 4, then between 13\,900 and 11\,000.
+    \end{itemize}
+    \item Why it is expensive (100~km, from $10^{-8}$ to $10^{-7}$~m$^{-2}$, components $\times 10.7$):
+    \begin{itemize}
+        \item Poisson prediction $\times 10.9$: linear in the components, about 0.1~ms each at every point. It runs per component, not vectorized (\texttt{FUTURE\_WORK.md} 1.3).
+        \item Gating $\times 20$ and initiation $\times 24$, against $\times 5.3$ for the whole scan: every component is tested against every measurement.
+        \item At more clutter or a larger area this would become the largest phase.
+    \end{itemize}
+    \item Recycling moves the cost, it does not remove it: from Murty's algorithm (95\,\% without recycling, below) to a Poisson intensity of thousands of short-lived clutter components.
+    \item These components have a purpose: a vessel whose first detection was recycled gets a narrow prior, so its second detection starts a confident track. After one missed scan a component's weight is at most 0.02, after two at most 0.002.
+    \item \TODO{for Chapters~\ref{sec:discussion}/further work: \texttt{FUTURE\_WORK.md} calls Poisson mixture reduction ``not worth it'' from 3800 components; at 12\,900 the Poisson part is a third of the scan. Options: vectorize the predict (same results; 2--4$\times$ on the phase by \texttt{FUTURE\_WORK.md} 1.3), delete recycled components sooner or merge them (changes results; check the missed share, already about half at $10^{-7}$).}
+    \item Without recycling, the association takes over:
+    \begin{itemize}
+        \item 50~km, $10^{-8}$~m$^{-2}$: a scan takes three times as long (1.21 against 0.41~s), largest group 313 tracks instead of 70;
+        \item 50~km, $10^{-7}$~m$^{-2}$: 265~s instead of 2.0~s, 95\,\% in Murty's algorithm on one group of 2600 tracks, matrices of up to 5133 rows; with recycling the largest group has 133 tracks.
+    \end{itemize}
+    \item Stock code, 50~km, $10^{-9}$~m$^{-2}$: 40\,\% of its scan in Murty's algorithm, on one list of 226 tracks.
+    \item \textbf{Finding:} clustering makes run time grow almost linearly with the number of measurements, and keeps the vessels that a single hypothesis list loses at scale. Recycling makes clutter above $10^{-9}$~m$^{-2}$ usable, and moves the cost to a Poisson intensity that grows with the clutter. The shipped tracker is 84 times faster than the 2024 code at 100~km.
+\end{itemize}
+
+% =====================================================================
+\subsection{Moored vessels}
+\label{sec:res-moored}
+
+\begin{itemize}
+    \item Runs: moored kept (Table~\ref{tab:exp-runs}), against the scene runs of the same windows and seeds; online estimate (Table~\ref{tab:res-moored}, Figure~\ref{fig:res-view-moored}). The continuity metrics: Section~\ref{sec:exp-scoring}.
+    \item Moored vessels (Section~\ref{sec:exp-defaults}) are 53--68\,\% of the vessels in these three windows.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Moored vessels removed (as in all other runs) and kept, mean over 5 seeds, online estimate. With moored vessels kept, the scores are also split into the moving and the moored vessels; missed and purity are only computed for the whole run. Run time: online tracker step.}
+\label{tab:res-moored}
+\small
+\begin{tabular}{l l r r r r r r r}
+\toprule
+Window & Moored vessels & Vessels & Missed & Coverage & Switches & Purity & Tracks & Run time \\
+ & & & [\%] & [\%] & / 1000 & & / vessel & [s/scan] \\
+\midrule
+Bergen & removed & 51 & 5.5 & 92.3 & 84.2 & 0.66 & 3.16 & 0.30 \\
+ & kept: all & 129 & 5.7 & 92.6 & 66.6 & 0.47 & 3.12 & 0.83 \\
+ & \quad moving & 51 & -- & 91.0 & 82.4 & -- & 3.29 & \\
+ & \quad moored & 78 & -- & 93.4 & 58.1 & -- & 3.01 & \\
+\addlinespace
+Ålesund & removed & 37 & 4.5 & 94.3 & 56.4 & 0.73 & 2.60 & 0.22 \\
+ & kept: all & 115 & 5.1 & 92.8 & 62.4 & 0.47 & 3.14 & 0.74 \\
+ & \quad moving & 37 & -- & 91.0 & 73.4 & -- & 3.43 & \\
+ & \quad moored & 78 & -- & 93.6 & 57.4 & -- & 2.96 & \\
+\addlinespace
+Stad & removed & 27 & 2.6 & 97.4 & 15.7 & 0.92 & 1.33 & 0.20 \\
+ & kept: all & 57 & 4.5 & 94.4 & 26.9 & 0.59 & 1.85 & 0.43 \\
+ & \quad moving & 27 & -- & 96.2 & 22.4 & -- & 1.53 & \\
+ & \quad moored & 30 & -- & 93.1 & 30.0 & -- & 2.05 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Images/view_legend.pdf}\\[2pt]
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics[width=0.93\textwidth]{Images/view_bergen_zoom.pdf}
+        \caption{Moored vessels removed.}
+    \end{subfigure}\\[4pt]
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics[width=0.93\textwidth]{Images/view_bergen_moored.pdf}
+        \caption{Moored vessels kept.}
+    \end{subfigure}
+    \caption{The Bergen harbor in the run viewer: scans 30--40 of Bergen, seed 0, online estimate. The land is not drawn: the coastline is too coarse at this scale. A moored vessel's truth is a single point, under the tracks at the quays east of 5.29\,E.}
+    \label{fig:res-view-moored}
+\end{figure}
+
+\begin{itemize}
+    \item The moored vessels themselves are tracked about as well as the moving ones: coverage 93--94\,\%, 30--58 ID switches per 1000 vessel-scans.
+    \item They are cheap to cover but expensive to keep apart. They lie closer to each other than $\sigma = 300$~m, so tracks among them are updated with detections of their neighbors (Figure~\ref{fig:res-view-moored}b): purity falls from 0.66--0.92 to 0.47--0.59.
+    \item They change the scores of the whole run in both directions:
+    \begin{itemize}
+        \item missed share up (5.5 to 5.7\,\%, 4.5 to 5.1\,\%, 2.6 to 4.5\,\%);
+        \item ID switches per 1000 vessel-scans down in Bergen (84.2 to 66.6), since 78 vessels with many easy scans are added; up in Ålesund and Stad.
+    \end{itemize}
+    So with moored vessels kept, the scores mostly describe the tracker at a quay, not on the moving traffic.
+    \item The cost falls on the moving vessels (the same vessels in both runs):
+    \begin{itemize}
+        \item coverage 1--3 percentage points lower;
+        \item more tracks per vessel (3.29 against 3.16, 3.43 against 2.60, 1.53 against 1.33);
+        \item 30\,\% more ID switches in Ålesund, 43\,\% more in Stad; Bergen is the exception (82.4 against 84.2). With the lagged estimate (Section~\ref{sec:res-estimates}) the increase is 23, 39 and 126\,\% (Bergen, Ålesund, Stad).
+    \end{itemize}
+    \item Run time per scan grows by a factor 2.2--3.4, the number of vessels by 2.1--3.1.
+    \item Hence the filter in all other runs: moored vessels are not the targets of interest, they cost run time, and they hide the moving vessels' scores. Tracking them is a different problem \TODO{discussion: a moored-vessel model, or leaving known berths to the AIS}.
+    \item \textbf{Finding:} moored vessels cost 2.2--3.4 times the run time and hide the scores of the moving vessels. With them kept, the moving vessels get more tracks per vessel and, except online in Bergen, more ID switches. So they are left out.
+\end{itemize}
+
+% =====================================================================
+\subsection{Online and lagged estimates}
+\label{sec:res-estimates}
+
+\begin{itemize}
+    \item Runs: the scene runs (Table~\ref{tab:exp-runs}); Table~\ref{tab:res-scenes}. The two estimates: Section~\ref{sec:exp-scoring}.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Scene runs: mean over 5 seeds, windows grouped by kind (harbors, shipping lanes, open sea), online (On) and lagged (Lag) estimate. Run time (online tracker step): 0.05--0.30~s per scan in every window.}
+\label{tab:res-scenes}
+\small
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{l r l r r r r r r r r}
+\toprule
+Window & Vessels & Est. & GOSPA & Missed & False & RMSE & Switches & Frag. & Purity & Tracks \\
+ & & & [m] & [\%] & [\%] & [m] & / 1000 & / 1000 & & / vessel \\
+\midrule
+Bergen & 51 & On & 2802 & 5.5 & 5.3 & 372 & 84.2 & 42.8 & 0.66 & 3.16 \\
+ & & Lag & 2202 & 4.1 & 1.6 & 294 & 55.3 & 29.1 & 0.67 & 2.57 \\
+Ålesund & 37 & On & 2460 & 4.5 & 3.7 & 370 & 56.4 & 33.9 & 0.73 & 2.60 \\
+ & & Lag & 1847 & 3.2 & 1.0 & 281 & 43.1 & 19.0 & 0.75 & 2.40 \\
+Tromsø & 12 & On & 1079 & 2.8 & 2.2 & 345 & 8.6 & 9.2 & 0.89 & 1.18 \\
+ & & Lag & 720 & 2.4 & 0.3 & 225 & 4.6 & 1.7 & 0.90 & 1.11 \\
+\addlinespace
+Skagerrak & 17 & On & 1347 & 1.7 & 2.2 & 333 & 3.1 & 6.2 & 0.95 & 1.08 \\
+ & & Lag & 850 & 1.4 & 0.2 & 207 & 2.3 & 0.8 & 0.96 & 1.07 \\
+Fedje & 21 & On & 1504 & 1.5 & 3.2 & 330 & 6.1 & 5.7 & 0.88 & 1.09 \\
+ & & Lag & 1017 & 1.2 & 1.1 & 220 & 2.9 & 1.6 & 0.88 & 1.08 \\
+Stad & 27 & On & 1701 & 2.6 & 3.6 & 335 & 15.7 & 8.5 & 0.92 & 1.33 \\
+ & & Lag & 1113 & 1.8 & 0.6 & 223 & 7.7 & 3.5 & 0.92 & 1.23 \\
+\addlinespace
+North Sea & 19 & On & 1462 & 0.9 & 0.5 & 325 & 1.1 & 2.0 & 0.97 & 1.02 \\
+ & & Lag & 902 & 0.7 & 0.1 & 195 & 0.0 & 0.0 & 0.98 & 1.00 \\
+Finnmark & 4 & On & 613 & 2.3 & 0.2 & 313 & 0.0 & 1.6 & 1.00 & 1.00 \\
+ & & Lag & 371 & 2.1 & 0.0 & 179 & 0.0 & 0.0 & 1.00 & 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Images/view_legend.pdf}\\[2pt]
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Images/view_lag_online.pdf}
+        \caption{Online: 4 ID switches.}
+    \end{subfigure}\hfill
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Images/view_lag_lagged.pdf}
+        \caption{Lagged ($L = 5$, smoothed): none.}
+    \end{subfigure}
+    \caption{The same run, scans and place in the two estimates: scans 22--32 of Bergen, seed 0, in the fairway west of the harbor. The land is not drawn. Circles with a black edge: the tracks at scan 32; large crosses: the detections at scan 32.}
+    \label{fig:res-view-lagged}
+\end{figure}
+
+\begin{itemize}
+    \item The lagged estimate is better in every window:
+    \begin{itemize}
+        \item GOSPA 21--40\,\% lower;
+        \item false share 64--100\,\% lower: tracks that coast after their vessel has gone are not reported;
+        \item RMSE 21--43\,\% lower, from the smoothing;
+        \item ID switches 24--53\,\% lower where there are any, fragmentations lower in every window, fewer tracks per vessel (Finnmark: 1.00 in both). Likely because a flip of the best hypothesis that is undone within 5 scans no longer shows;
+        \item the missed share changes least (7--29\,\% lower); purity hardly changes.
+    \end{itemize}
+    \item What that looks like (Figure~\ref{fig:res-view-lagged}): two vessels meeting in the fairway west of the Bergen harbor, scans 22--32 of a scene run, about 10~km across.
+    \begin{itemize}
+        \item online: the best hypothesis flips between the vessels while they are close, 4 ID switches; tracks zig-zag around the truth;
+        \item lagged: the same 55 estimates of the same 5 tracks, no events, and the tracks follow the truth. RMSE of the matched estimates in the panel 335~m online, 201~m lagged;
+        \item the flips are undone within 5 scans, so the lagged estimate never reports them.
+    \end{itemize}
+    \item How the gain depends on the revisit time: Section~\ref{sec:res-revisit}. It shrinks as five scans become a long time.
+    \item The price is delay. Whether 10~min is acceptable depends on the use \TODO{discussion: online for alerts, lagged for the picture}.
+    \item From here on both estimates are reported.
+    \item \textbf{Finding:} the lagged estimate, 5 scans late, is better in every window: GOSPA 21--40\,\% lower, most false tracks gone, and 24--53\,\% fewer ID switches where there are any.
+\end{itemize}
+
+% =====================================================================
+\subsection{Geometry (RQ2)}
+\label{sec:res-geometry}
+
+\begin{itemize}
+    \item Runs: the lane revisit and Mid-coast runs (Table~\ref{tab:exp-runs}): the baseline (one plane) and the n-vector tracker on the same measurements.
+\end{itemize}
+
+\subsubsection{Windows of 35--40~km}
+
+\begin{itemize}
+    \item Lane revisit runs: Stad and Skagerrak, revisit 120--900~s.
+    \item 39 of 40 runs: the same estimates in both modes, at most 18~cm apart (median of the runs' largest differences 7~mm); every score identical to the printed precision.
+    \item The remaining run (Stad, 120~s, one seed): one association went differently; over the five seeds the mean GOSPA then differs by 0.5~m (online) and 3~m (lagged).
+\end{itemize}
+
+\subsubsection{A 250~km window}
+
+\begin{itemize}
+    \item Mid-coast runs: 250~km, about 770 moving vessels, revisit 300, 900 and 1800~s.
+    \item Over the distances a vessel travels between scans, the error budget of Section~\ref{sec:nvector-error} puts the single plane's prediction error at up to about 14~m at the window's edge.
+    \item The scores of the two modes agree within the spread over seeds at every revisit time, for both estimates (Table~\ref{tab:res-3b}).
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Mid-coast runs: baseline (B) against n-vector (N), mean over 3 seeds. GOSPA $\pm$ the standard deviation over seeds. Run time: online tracker step, three jobs in parallel.}
+\label{tab:res-3b}
+\small
+\begin{tabular}{r l r r r r r r r r}
+\toprule
+& & \multicolumn{2}{c}{GOSPA [m]} & \multicolumn{2}{c}{Missed [\%]} & \multicolumn{2}{c}{Switches / 1000} & \multicolumn{2}{c}{Run time [s/scan]} \\
+Revisit & Est. & B & N & B & N & B & N & B & N \\
+\midrule
+300 s & On & 12256 $\pm$ 28 & 12262 $\pm$ 26 & 7.79 & 7.86 & 72.1 & 72.7 & 3.0 & 4.2 \\
+ & Lag & 9953 $\pm$ 31 & 9963 $\pm$ 24 & 5.70 & 5.77 & 57.5 & 57.6 & & \\
+900 s & On & 14157 $\pm$ 18 & 14163 $\pm$ 24 & 19.56 & 19.60 & 296.1 & 298.3 & 10.7 & 11.0 \\
+ & Lag & 13619 $\pm$ 35 & 13635 $\pm$ 28 & 17.76 & 17.82 & 298.3 & 300.0 & & \\
+1800 s & On & 14612 $\pm$ 64 & 14621 $\pm$ 62 & 31.43 & 31.62 & 356.2 & 353.7 & 90.9 & 98.7 \\
+ & Lag & 14415 $\pm$ 64 & 14426 $\pm$ 68 & 31.39 & 31.59 & 356.2 & 353.7 & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item The scores hide whether individual estimates differ. So: pair each baseline estimate with the n-vector estimate of the same scan updated with the same measurement (96--100\,\% of the updated estimates find a partner).
+    \item Same history: both tracks updated with the same measurements, and missed the same scans, up to that scan. The difference then comes from the geometry alone.
+    \item Result for the online estimate: Table~\ref{tab:res-pairs} and Figure~\ref{fig:res-geometry-pairs}.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Mid-coast runs: paired estimates of the two modes, online estimate, all seeds. Gain: posterior position variance over $\sigma^2$ for updated estimates (median, seed 0), the weight of the measurement in the update.}
+\label{tab:res-pairs}
+\small
+\begin{tabular}{r r r r r r r r}
+\toprule
+& & & \multicolumn{2}{c}{Same history} & \multicolumn{2}{c}{Diverged} & \\
+Revisit & Pairs & Same history & $<$ 1 mm & $<$ 1 cm & Median & 99th pct. & Gain \\
+\midrule
+300 s & 164\,532 & 56\,\% & 89\,\% & 95\,\% & 0.23 m & 309 m & 0.84 \\
+900 s & 43\,555 & 77\,\% & 90\,\% & 97\,\% & 20 m & 133 m & 0.98 \\
+1800 s & 15\,266 & 94\,\% & 97\,\% & 99.9\,\% & 3.7 m & 27 m & 0.998 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{Images/res_geometry_pairs.pdf}
+    \caption{Mid-coast runs, online estimate. (a) Share of paired estimates whose positions differ by less than a given distance, for pairs with the same history (solid) and with diverged histories (dashed). (b) Mean difference in position error to the truth, baseline minus n-vector, against distance from the center of the field of view, with 95\,\% confidence intervals; positive means the baseline is worse.}
+    \label{fig:res-geometry-pairs}
+\end{figure}
+
+\begin{itemize}
+    \item Same history: the modes agree within a centimeter in 95--99.9\,\% of the pairs; median difference at most 0.1~mm.
+    \item Why (last column of Table~\ref{tab:res-pairs}): in the update $\hat{x} = \bar{x} + K(z - H\bar{x})$, an error $\delta$ in the predicted position reaches the estimate as $(1 - K)\delta$.
+    \begin{itemize}
+        \item After 30~min without an update the predicted position is uncertain by kilometers, far more than $\sigma = 300$~m: gain on position 0.998, the estimate follows the measurement. 14~m in the prediction becomes about 3~cm in the estimate.
+        \item At 300~s the gain is 0.84, but the distance traveled, and with it the prediction error, is six times shorter.
+        \item The single plane's error is real in the prediction, but the update removes it.
+    \end{itemize}
+    \item Pairs that differ by meters or more have diverged histories: at some scan the modes chose different associations, and the tracks evolved apart from there. Not a geometry effect either:
+    \begin{itemize}
+        \item the share of diverged pairs shows no clear trend towards the edge, where the single plane is worst: at 300~s it lies between 36 and 48\,\% in every 50~km ring, 41\,\% within 50~km of the center, 48\,\% at 200--250~km;
+        \item near-ties between hypotheses are decided by numerical differences of the size above, and the outcome then propagates;
+        \item neither mode is more accurate: mean difference in position error, baseline minus n-vector, between $-0.6$ and $+0.2$~m per seed and revisit time, standard errors 0.1--0.4~m, no trend with distance from the center (Figure~\ref{fig:res-geometry-pairs}b);
+        \item position NEES of the two modes agrees to the third decimal (2.104 and 2.105 at 300~s, 1.987 and 1.986 at 1800~s, against an expected 2).
+    \end{itemize}
+    \item The n-vector tracker costs run time: 1.3--1.75 times the baseline's on the lanes, 1.03--1.4 times on Mid-coast. Both modes ran in the same job, one after the other.
+    \item \textbf{Finding:} the exact spherical geometry changes neither the estimates nor the scores, up to a 250~km window at 30~min revisit time. The measurement update removes the single plane's prediction error; the remaining differences come from near-tied associations and favor neither mode.
+\end{itemize}
+
+% =====================================================================
+\subsection{Scenes and traffic (RQ3)}
+\label{sec:res-scenes}
+
+\subsubsection{Scene windows}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Images/view_legend.pdf}\\[2pt]
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Images/view_north_sea.pdf}
+        \caption{North Sea: one track per vessel.}
+    \end{subfigure}\hfill
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Images/view_bergen.pdf}
+        \caption{Bergen: events in the harbor and the fairways.}
+    \end{subfigure}
+    \caption{A good and a bad scene in the run viewer: the whole run (50 scans at 120~s), seed 0, lagged estimate. Dashed red: the field of view. The harbor at the center of (b) is shown in Figure~\ref{fig:res-view-moored}a.}
+    \label{fig:res-view-scenes}
+\end{figure}
+
+\begin{itemize}
+    \item Runs: the scene runs (Table~\ref{tab:exp-runs}).
+    \item At 120~s every window is detected well: 0.7--4.1\,\% missed and at most 1.6\,\% false (lagged; Table~\ref{tab:res-scenes}).
+    \item The windows differ in identity:
+    \begin{itemize}
+        \item busy harbors Bergen and Ålesund: 43--55 ID switches per 1000 vessel-scans, 2.4--2.6 tracks per vessel, purity 0.67--0.75 (lagged); online 56--84 switches and up to 3.2 tracks per vessel;
+        \item lanes and open sea: at most 8 switches per 1000 vessel-scans, at most 1.23 tracks per vessel (lagged);
+        \item Tromsø, a harbor with 12 moving vessels, behaves like a lane.
+    \end{itemize}
+    \item What that looks like (Figure~\ref{fig:res-view-scenes}): in the North Sea each vessel is one track from start to end; in Bergen the switches and fragmentations sit where vessels meet, in the harbor and where the fairways join.
+    \item Harbors are not hard for run time: every window runs at 0.05--0.30~s per scan, Murty 7--11\,\% of it.
+    \item They are hard for association: largest group per scan 45--51 tracks on average in Bergen and Ålesund (up to 116), against 10--33 in the other windows.
+\end{itemize}
+
+\subsubsection{Time of day}
+\label{sec:res-time-of-day}
+
+% cut candidate: the time-of-day runs could be two sentences and no table
+\begin{table}[htbp]
+\centering
+\caption{Time-of-day runs: the windows started at six times of the AIS day, one seed. Top: moving vessels scored; bottom: ID switches per 1000 vessel-scans, lagged estimate. --: no moving vessels at that time.}
+\label{tab:res-time-of-day}
+\small
+\begin{tabular}{l l r r r r r r}
+\toprule
+& Start (UTC) & 00 & 04 & 08 & 12 & 16 & 20 \\
+\midrule
+Vessels & Bergen & 9 & 31 & 44 & 55 & 35 & 18 \\
+ & Ålesund & -- & 24 & 39 & 44 & 35 & 20 \\
+ & Tromsø & 4 & 7 & 9 & 11 & 12 & 6 \\
+ & Skagerrak & 8 & 15 & 12 & 20 & 16 & 16 \\
+ & Fedje & 23 & 27 & 19 & 23 & 22 & 18 \\
+ & Stad & -- & 20 & 33 & 18 & 17 & 11 \\
+ & North Sea & 18 & 17 & 16 & 21 & 18 & 14 \\
+ & Finnmark & 5 & 3 & 5 & 6 & 6 & 9 \\
+\midrule
+Switches & Bergen & 0 & 46 & 19 & 38 & 10 & 13 \\
+/ 1000 & Ålesund & -- & 31 & 29 & 28 & 27 & 15 \\
+ & Tromsø & 0 & 11 & 25 & 15 & 21 & 0 \\
+ & Skagerrak & 0 & 0 & 5 & 7 & 0 & 2 \\
+ & Fedje & 0 & 11 & 8 & 5 & 3 & 5 \\
+ & Stad & -- & 14 & 3 & 3 & 25 & 0 \\
+ & North Sea & 0 & 0 & 3 & 0 & 0 & 0 \\
+ & Finnmark & 0 & 0 & 0 & 0 & 0 & 7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item Runs: the time-of-day runs (Table~\ref{tab:exp-runs}), one seed; Table~\ref{tab:res-time-of-day}.
+    \item The traffic changes over the day, e.g.\ from 9 vessels at 00:00 to 55 at 12:00 in Bergen; the lanes and the open sea change less.
+    \item Over all 46 runs the scores follow the traffic. Rank correlation with the number of vessels (lagged): 0.96 for GOSPA (grows with the number of vessels by construction), 0.58 for ID switches, $-0.54$ for purity, 0.29 for the missed share (0.0--3.2\,\% in every run).
+    \item Within a window the correlations are weaker (0.35 for switches, $-0.36$ for purity, 0.15 for the missed share): part of the difference between windows is the kind of scene, not only its traffic. With 20--30 vessels: the two harbor runs (Ålesund) have 15 and 31 switches per 1000 vessel-scans, the six lane and open-sea runs 0--14.
+    \item With one seed, single entries are noisy: Bergen has 19 switches at 08 with 44 vessels and 46 at 04 with 31.
+    \item \textbf{Finding:} harbors cost identity, not detection. Every window is detected well at 120~s, but the busy harbors have 43--55 ID switches per 1000 vessel-scans (lagged), the lanes and the open sea at most 8. Over the day the scores follow the traffic, but the kind of scene matters beyond the number of vessels.
+\end{itemize}
+
+% =====================================================================
+\subsection{Revisit time (RQ3)}
+\label{sec:res-revisit}
+
+\begin{itemize}
+    \item Runs: the lane revisit runs (Table~\ref{tab:exp-runs}), 120--900~s over 240~min, and the Mid-coast runs (Table~\ref{tab:exp-runs}), 300--1800~s over 8~h.
+    \item Scores of the n-vector tracker in Table~\ref{tab:res-revisit}; what it looks like in Figure~\ref{fig:res-view-revisit}.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Lane revisit and Mid-coast runs: the n-vector tracker against revisit time, mean over seeds, online (On) and lagged (Lag) estimate. Coverage and purity: lagged. Run time: online tracker step, three jobs in parallel.}
+\label{tab:res-revisit}
+\small
+\begin{tabular}{l r r r r r r r r r r}
+\toprule
+& & \multicolumn{2}{c}{Missed [\%]} & \multicolumn{2}{c}{False [\%]} & \multicolumn{2}{c}{Switches / 1000} & Coverage & Purity & Run time \\
+Window & Revisit & On & Lag & On & Lag & On & Lag & [\%] & & [s/scan] \\
+\midrule
+Skagerrak & 120 s & 2.3 & 1.5 & 2.8 & 0.2 & 3.0 & 2.1 & 98.5 & 0.92 & 0.15 \\
+ & 300 s & 6.8 & 3.5 & 8.2 & 1.0 & 8.1 & 4.8 & 96.5 & 0.96 & 0.08 \\
+ & 600 s & 14.5 & 6.9 & 15.5 & 3.1 & 30.4 & 6.5 & 93.1 & 0.88 & 0.08 \\
+ & 900 s & 27.5 & 19.2 & 11.4 & 4.3 & 43.2 & 24.0 & 80.8 & 0.89 & 0.08 \\
+\addlinespace
+Stad & 120 s & 2.7 & 1.6 & 2.4 & 0.2 & 16.9 & 10.7 & 98.0 & 0.80 & 0.27 \\
+ & 300 s & 6.6 & 4.6 & 6.4 & 1.5 & 47.9 & 32.4 & 94.8 & 0.79 & 0.13 \\
+ & 600 s & 13.6 & 10.2 & 14.0 & 4.1 & 116.6 & 97.2 & 89.2 & 0.75 & 0.13 \\
+ & 900 s & 20.1 & 17.0 & 12.8 & 6.5 & 166.8 & 148.8 & 82.7 & 0.70 & 0.13 \\
+\addlinespace
+Mid-coast & 300 s & 7.9 & 5.8 & 5.3 & 2.2 & 72.7 & 57.6 & 93.3 & 0.61 & 4.2 \\
+ & 900 s & 19.6 & 17.8 & 11.8 & 9.3 & 298.3 & 300.0 & 81.4 & 0.42 & 11.0 \\
+ & 1800 s & 31.6 & 31.6 & 10.3 & 8.5 & 353.7 & 353.7 & 67.9 & 0.32 & 98.7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Images/view_legend.pdf}\\[2pt]
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Images/view_stad_120.pdf}
+        \caption{Revisit 120~s (120 scans).}
+    \end{subfigure}\hfill
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Images/view_stad_900.pdf}
+        \caption{Revisit 900~s (16 scans).}
+    \end{subfigure}
+    \caption{The same 240~min of Stad in the run viewer at two revisit times: the whole run, seed 0, lagged estimate. At 900~s the tracks are straight lines between sparse detections, and some jump between vessels on different lanes.}
+    \label{fig:res-view-revisit}
+\end{figure}
+
+\begin{itemize}
+    \item Detection degrades steadily (lagged):
+    \begin{itemize}
+        \item missed on the lanes: 1.5--1.6\,\% at 120~s to 17--19\,\% at 900~s; on Mid-coast 5.8\,\% at 300~s to 31.6\,\% at 1800~s;
+        \item coverage on the lanes from 98\,\% to 81--83\,\%, on Mid-coast from 93\,\% to 68\,\%;
+        \item at 1800~s, 36 of the 730 vessels are mostly lost (tracked in less than 20\,\% of their scans in view), against 3 at 300 and 900~s.
+    \end{itemize}
+    \item Identity degrades faster than detection:
+    \begin{itemize}
+        \item Stad: ID switches from 11 to 149 per 1000 vessel-scans between 120 and 900~s (lagged);
+        \item Mid-coast: 58 at 300~s, 300 at 900~s, 354 at 1800~s;
+        \item purity on Mid-coast falls from 0.61 to 0.42 and 0.32: at long revisit times a track is increasingly made of detections of different vessels. Figure~\ref{fig:res-view-revisit}b shows tracks that jump between vessels on different lanes;
+        \item Skagerrak, with fewer and more widely spaced vessels, keeps identities much better (2 to 24 switches per 1000 vessel-scans, lagged).
+    \end{itemize}
+    \item The lagged estimate's advantage depends on the revisit time:
+    \begin{itemize}
+        \item at short revisit times it removes most false tracks: on the lanes the false share falls from 2.4--2.8\,\% to about 0.2\,\% at 120~s, and from 14--15\,\% to 3--4\,\% at 600~s;
+        \item on Skagerrak it halves the missed share at 300 and 600~s and removes most switches at 600~s (30.4 to 6.5 per 1000 vessel-scans);
+        \item at 1800~s on Mid-coast the estimates are nearly the same (missed 31.6\,\% for both, switches identical, GOSPA 14\,426 against 14\,621~m): five scans of hindsight then mean 2.5~h in which most tracks change little.
+    \end{itemize}
+    \item Run time:
+    \begin{itemize}
+        \item small windows: does not grow with revisit time (0.08--0.27~s per scan);
+        \item Mid-coast, with the same 810--825 measurements per scan: 4.2~s at 300~s, 11~s at 900~s, 99~s at 1800~s, while the largest cluster stays small (9--24 tracks on average);
+        \item the cost is in the association: with larger gates more tracks share measurements. Before the campaign a profile at 100~km and 900~s found one group of about 510 tracks and 510 measurements, with 83\,\% of the scan in Murty's algorithm \TODO{source: method.md s5.2, regime B; confirm with a profile of Mid-coast at 1800~s}.
+    \end{itemize}
+    \item \textbf{Finding:} as the revisit time grows from 2 to 30~min, the tracker loses detections (missed 1.5 to 32\,\%, lagged) and, faster, identity (up to about 350 ID switches per 1000 vessel-scans); the lagged estimate stops helping, and run time on a large window grows to about 100~s per scan, in the association.
+\end{itemize}
+
+% =====================================================================
+% cut candidate: a short summary; the findings that end each section, and the conclusion, may make it redundant
+\subsection{Summary}
+\label{sec:res-summary}
+
+\begin{itemize}
+    \item RQ1: clustering turns a run time that grows with the square of the number of measurements into one that grows almost linearly, and it keeps the vessels that a single hypothesis list loses at scale. Recycling is what allows clutter above $10^{-9}$~m$^{-2}$, at the price of a Poisson intensity that grows with the clutter. With both, the tracker runs a 200~km scene with 425 vessels at 1.8~s per scan, 84 times faster than the 2024 code at 100~km.
+    \item Evaluation: moored vessels cost run time and hide the scores of the moving traffic, so they are left out; the lagged estimate, 5 scans late, lowers GOSPA by 21--40\,\% and removes most false tracks.
+    \item RQ2: exact spherical geometry changes neither the estimates nor the scores, up to a 250~km window with 30~min revisit time. The single plane's prediction error is removed by the measurement update; the remaining differences come from near-tied associations and favor neither mode.
+    \item RQ3: harbors cost identity, not detection. As the revisit time grows from 2 to 30~min, the tracker loses detections (missed 1.5 to 32\,\%) and, faster, identity (ID switches up to about 350 per 1000 vessel-scans), the lagged estimate stops helping, and run time on a large window grows to about 100~s per scan in the association.
 \end{itemize}
 
 \subsection{Notes}

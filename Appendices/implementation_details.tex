@@ -21,4 +21,40 @@
 \label{app:reproduction}
 \begin{itemize}
     \item Commit hashes of the code and the report, the commands that produce each table and figure, and where the data comes from.
+    \item Code: every run of Chapter~\ref{sec:results} at commit \texttt{b6e1d45} (tag \texttt{report-freeze}); the 2024 replays on the branch \texttt{original-2024}. Report: \TODO{commit of the report at hand-in}.
+    \item Shared by all runs: the AIS day 2025-09-25 (Section~\ref{sec:sim-truth}); EO sensor, $\sigma = 300$~m, $P_{\mathrm{D}} = 0.9$; the tracker parameters of Section~\ref{sec:impl-parameters}; moored vessels left out except in the runs with moored vessels kept; GOSPA $p = 2$, $\alpha = 2$, $c = 1000$~m.
+    \item Each set of runs: Table~\ref{tab:app-runs}. Window centers, radii and start times: Table~\ref{tab:exp-windows}.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption[Settings of each set of runs]{Settings of each set of runs in Chapter~\ref{sec:results}. Under the name: the campaign in \texttt{integration/run\_campaign.py}. Geometry: B baseline (one plane), N n-vector. Warm-up: scans left out of the scores. All runs score the online and the lagged ($L = 5$, smoothed) estimate, except the scale runs and the 2024 replays (online only) and the phase profiles (timing only).}
+\label{tab:app-runs}
+\footnotesize
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.1cm} X >{\raggedright\arraybackslash}p{2.0cm} l l r r}
+\toprule
+Runs & Windows and settings & Revisit $\times$ scans & Seeds & Geom. & Warm-up & Runs \\
+\midrule
+Scale runs \newline \texttt{study1} & Bergen center, radius 12, 25, 50, 100, 150, 200~km at clutter $10^{-9}$; 50 and 100~km also at $10^{-8}$ and $10^{-7}$~m$^{-2}$. Versions S, C, R (S and C not at 100~km, $10^{-7}$). Stopped at 60~min projected or 10~min per scan & 120~s $\times$ 30 & 0 & B & 10 & 28 \\
+2024 replays & The 9 points of S, version O, same measurements; same limits, hard timeout 90~min & 120~s $\times$ 30 & 0 & B & 10 & 9 \\
+Phase profiles & The 10 points of the scale runs, version R; C at 50~km, $10^{-8}$ and $10^{-7}$; S at 50~km, $10^{-9}$ & 120~s $\times$ 12 & 0 & N (S: B) & 3 & 13 \\
+Moored kept \newline \texttt{study5} & Bergen, Ålesund, Stad; moored vessels kept & 120~s $\times$ 50 & 0--4 & N & 10 & 15 \\
+Scene runs \newline \texttt{study4a} & The eight windows of Table~\ref{tab:exp-windows} & 120~s $\times$ 50 & 0--4 & N & 10 & 40 \\
+Lane revisit \newline \texttt{study3a} & Skagerrak, Stad; 240~min & 120, 300, 600, 900~s $\times$ 120, 48, 24, 16 & 0--4 & B, N & 5 & 40 \\
+Mid-coast \newline \texttt{study3b} & Mid-coast; 480~min & 300, 900, 1800~s $\times$ 96, 32, 16 & 0--2 & B, N & 5 & 9 \\
+Time of day \newline \texttt{study4b} & The eight windows, started at 00, 04, 08, 12, 16, 20~UTC (Stad and Ålesund at 00 had no moving vessels and did not run) & 120~s $\times$ 50 & 0 & N & 10 & 48 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{itemize}
+    \item Commands (from the code repository's root, \texttt{venv/bin/python}):
+    \begin{itemize}\raggedright
+        \item a set of runs: \texttt{integration/run\_campaign.py --campaign study1 --workers 1}; the other campaigns with \texttt{--workers 3}. Output: one run file per run in \path{integration/output/campaign/}$\langle$campaign$\rangle$, with \texttt{runs.csv} and \texttt{summary.csv};
+        \item one run again, from the settings in its file: \texttt{integration/run\_campaign.py --rerun RUN.npz};
+        \item a phase profile: \texttt{integration/profile\_scale.py --scenario bergen --exclude-stationary --interval 120 --radius R --clutter C}, with \texttt{--recycle 0} for C and \texttt{--stock --mode baseline} for S;
+        \item the 2024 replays, on \texttt{original-2024}: \texttt{replay/run\_points.py} on the folder of the scale runs.
+    \end{itemize}
+    \item Window names in the code: \texttt{bergen}, \texttt{alesund}, \texttt{tromso}, \texttt{skagerrak}, \texttt{fedje}, \texttt{stad}, \texttt{north\_sea}, \texttt{finnmark}, \texttt{mid\_coast}.
+    \item Tables and figures of Chapter~\ref{sec:results}: computed from the run files alone, without running the tracker again; the viewer figures drawn with \texttt{integration/viewer.py} \TODO{give the analysis and figure scripts a permanent home and name them here}.
 \end{itemize}
