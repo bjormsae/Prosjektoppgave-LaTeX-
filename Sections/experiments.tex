@@ -9,22 +9,25 @@
 % replay/run_points.py on original-2024), phase profiles = study2, moored kept = study5, scene runs = study4a,
 % lane revisit runs = study3a, Mid-coast runs = study3b, time-of-day runs = study4b.
 % Map: Images/exp_windows_map.pdf, from make_window_map.py (session scratchpad; Natural Earth 10 m land).
+Experimentation must be conducted to evaluate the PMBM trackers performance. This refers both to accuracy and run time, alongside finding the limitations of the tracker. The following chapter systematically describes the experiments that were conducted and why they were chosen. \autoref{sec:exp-windows} introduces the nine named windows experiments were conducted in. \autoref{sec:exp-defaults} presents the shared parameters between all runs and their motivation. \autoref{sec:exp-runs} contains an overview of all the experiment runs that were conducted and a brief motivation for each.
 
-\begin{itemize}
-    \item One campaign on the code at commit \texttt{b6e1d45} (tag \texttt{report-freeze}), on one laptop (Apple M3, 16~GB, Python 3.11); 4~h 41~min in all. Every setting: Appendix~\ref{app:reproduction}.
-    \item Every run saved as one file (settings, truth, labeled measurements, both estimates, per-scan metrics): every number in Chapter~\ref{sec:results} can be recomputed, and every run replayed in the viewer, without running the tracker again.
-    \item This chapter: the windows (Section~\ref{sec:exp-windows}), the defaults and the scoring (Section~\ref{sec:exp-scoring}), and the seven sets of runs (Section~\ref{sec:exp-runs}).
-\end{itemize}
+%\begin{itemize}
+%    \item One campaign on the code at commit \texttt{b6e1d45} (tag \texttt{report-freeze}), on one laptop (Apple M3, 16~GB, Python 3.11); 4~h 41~min in all. Every setting: Appendix~\ref{app:reproduction}.
+%    \item Every run saved as one file (settings, truth, labeled measurements, both estimates, per-scan metrics): every number in Chapter~\ref{sec:results} can be recomputed, and every run replayed in the viewer, without running the tracker again.
+%    \item This chapter: the windows (Section~\ref{sec:exp-windows}), the defaults and the scoring (Section~\ref{sec:exp-scoring}), and the seven sets of runs (Section~\ref{sec:exp-runs}).
+%\end{itemize}
 
 % =====================================================================
-\subsection{Windows}
+\subsection{Named Windows}
 \label{sec:exp-windows}
 
-\begin{itemize}
-    \item Nine windows on the Norwegian AIS day 2025-09-25 (Section~\ref{sec:sim-truth}), of four kinds (Figure~\ref{fig:exp-windows}, Table~\ref{tab:exp-windows}).
-    \item Chosen from the data: enough vessels, and no long AIS gaps for the moving vessels, since the truth bridges a gap with a straight line. % source: method.md s2 (named windows): every moving vessel reports at least every 6 min over 100 min of 120 s scans; rejected: Oslofjord (9 h gap), Tampen (3.4 h), Haltenbanken, the Lofoten lanes
-    \item Mid-coast is the window for the geometry: of three large candidates it had the most vessels and the fewest long gaps (656--699 vessels per scan, 1\,\% of the moving truth in a gap of more than 60~min). % source: method.md s2; the others: an enlarged North Sea (13 %) and off Troms-Finnmark (a third of the vessels)
-\end{itemize}
+\autoref{fig:exp-windows} shows the locations and default sizes of the nine named windows used in tracker evaluation. They were chosen to inhabit different challenges and characteristics. Harbors are dense, with closely spaced traffic, open sea quite sparse, while the rest offers a mix of both. The exact locations were chosen somewhat arbitrarily, but they needed to have few long AIS gaps for moving vessels. Gaps are bridged by straight lines, which would make the ground truth favor the CV-model unfairly. 
+
+%\begin{itemize}
+%    \item Nine windows on the Norwegian AIS day 2025-09-25 (Section~\ref{sec:sim-truth}), of four kinds (Figure~\ref{fig:exp-windows}, Table~\ref{tab:exp-windows}).
+%    \item Chosen from the data: enough vessels, and no long AIS gaps for the moving vessels, since the truth bridges a gap with a straight line. % source: method.md s2 (named windows): every moving vessel reports at least every 6 min over 100 min of 120 s scans; rejected: Oslofjord (9 h gap), Tampen (3.4 h), Haltenbanken, the Lofoten lanes
+%    \item Mid-coast is the window for the geometry: of three large candidates it had the most vessels and the fewest long gaps (656--699 vessels per scan, 1\,\% of the moving truth in a gap of more than 60~min). % source: method.md s2; the others: an enlarged North Sea (13 %) and off Troms-Finnmark (a third of the vessels)
+%\end{itemize}
 
 \begin{figure}[htbp]
     \centering
@@ -63,26 +66,40 @@ Coast and sea & Mid-coast & 62.50\,N 5.50\,E & 250 & 06:00 & 769 \\
 \label{sec:exp-scoring}
 \label{sec:exp-defaults}
 
+Tracker specific parameters are specified in \autoref{sec:impl-parameters} and were not altered throughout testing. Tracker and simulator parameters are also matched in all experiments. The hardware used in the experiments was a \textit{M3 16GB MacBook Air} running \textit{macOS} 15.7.4 and \textit{Python} 3.11. All experiments involving timing of scans or functions were run sequentially as the only load on the machine. 
+\medskip
+
+Stationary vessels are filtered out before tracking by default. The reason is twofold: fewer vessels allow for running bigger tracking scenarios and dense harbors with close stationary vessels require a more accurate sensor model to provide an interesting tracking problem. The estimate lag was set to $L = 5$. This was found to strike a good balance between performance gain and online reportability during initial testing.
+
 \begin{table}[htbp]
 \centering
-\caption{Defaults of every run unless Table~\ref{tab:exp-runs} says otherwise, and how runs are scored.}
+\caption{Defaults of every run unless Table~\ref{tab:exp-runs} says otherwise. Also includes a brief motivation for the choices.}
 \label{tab:exp-defaults}
 \small
-\begin{tabularx}{\textwidth}{l l X}
+\begin{tabularx}{\textwidth}{l Y{0.7} Y{1.3}}
 \toprule
 Setting & Value & Note \\
 \midrule
-Sensor & EO, $\sigma = 300$~m, $P_{\mathrm{D}} = 0.9$ & Section~\ref{sec:sim-sensors} \\
-Clutter & $10^{-9}$~m$^{-2}$ & At $10^{-7}$ the stock tracker crashed at the proof-of-concept size \\ % source: method.md s2
-Scans & 50 at 120~s & \\
-Tracker & n-vector, clustered, recycling & Parameters: Section~\ref{sec:impl-parameters} \\
-Moored vessels & Left out & Within 100~m of the median position at every scan; see below \\
-Seeds & 5 (0--4) & A seed changes noise, missed detections and clutter, not the truth \\
-Estimates & Online and lagged & Lagged: $L = 5$ scans later, smoothed; see below \\
-Warm-up & 10 scans & 5 in the lane revisit and Mid-coast runs \\
+Sensor & EO, $\sigma = 300$~m, $P_{\mathrm{D}} = 0.9$ & Chosen kind of arbitrary, but well within realistic bounds. Not the focus of this study. \\
+\addlinespace
+Clutter rate & $10^{-9}$~m$^{-2}$ & Same as above. The sensors we are simulating generally have low clutter rate \\ % source: method.md s2
+\addlinespace
+Scans & 50 at 120~s intervals & Two minutes is a good baseline which the tracker should be able to handle \\
+\addlinespace
+Tracker & n-vector geometry, clustered, recycling enabled & Parameters: Section~\ref{sec:impl-parameters} \\
+\addlinespace
+Stationary vessels & Left out & Threshold: within 100~m of the median position at every scan \\
+\addlinespace
+RNG Seeds & 5 (0--4) & A seed changes noise, not the truth \\
+\addlinespace
+Estimates & Online and lagged & Lagged: $L = 5$ scans later, smoothed. \\
+\addlinespace
+Warm-up & 10 scans & Allows the tracker to stabilize before evaluation \\
 \addlinespace
 Accuracy & GOSPA, $p = 2$, $\alpha = 2$, $c = 1000$~m & Great-circle distances \TODO{cite Rahmathullah et al.\ 2017}. Missed and false as shares of the vessel-scans, localization as the RMSE of the matched pairs. Compares runs on the same scene only \\
+\addlinespace
 Continuity & Table~\ref{tab:exp-continuity} & Rates per 1000 vessel-scans \\
+\addlinespace
 Run time & Tracker step per scan & Wall clock, without scoring. Scale runs and profiles one job at a time, the rest three in parallel ($\pm 15$\,\% \TODO{source: method.md s5.2}) \\
 \bottomrule
 \end{tabularx}
@@ -106,11 +123,11 @@ Purity & Share of a track's measurement updates from its majority vessel (from t
 \end{tabularx}
 \end{table}
 
-\begin{itemize}
-    \item Moored vessels are left out because moored vessels side by side dominate the scores, and harbor tracking is later work; agreed with the supervisors. A position rule, since only about 40\,\% of moored vessels report their status in AIS. What the filter changes is itself a result (Section~\ref{sec:res-moored}). % source: D6; method.md s2
-    \item Continuity is scored apart from GOSPA, which does not see whether a vessel keeps its track. The sticky matching keeps toggles between vessels closer than $\sigma$ from counting as switches. % source: D10
-    \item Lagged estimate: each track followed back $L = 5$ scans along its history, reported only if it had a detection in that interval, and smoothed (Rauch-Tung-Striebel). Later scans settle associations, and tracks that coast after their vessel has left are dropped. $L$ is in scans at every revisit time: 10~min late at 120~s, 75~min at 900~s \TODO{the definition may belong in Section~\ref{sec:impl-estimation}}. % source: D8, D11; method.md s4, s5.4 (gain flat from L = 3)
-\end{itemize}
+%\begin{itemize}
+%    \item Moored vessels are left out because moored vessels side by side dominate the scores, and harbor tracking is later work; agreed with the supervisors. A position rule, since only about 40\,\% of moored vessels report their status in AIS. What the filter changes is itself a result (Section~\ref{sec:res-moored}). % source: D6; method.md s2
+%    \item Continuity is scored apart from GOSPA, which does not see whether a vessel keeps its track. The sticky matching keeps toggles between vessels closer than $\sigma$ from counting as switches. % source: D10
+%    \item Lagged estimate: each track followed back $L = 5$ scans along its history, reported only if it had a detection in that interval, and smoothed (Rauch-Tung-Striebel). Later scans settle associations, and tracks that coast after their vessel has left are dropped. $L$ is in scans at every revisit time: 10~min late at 120~s, 75~min at 900~s \TODO{the definition may belong in Section~\ref{sec:impl-estimation}}. % source: D8, D11; method.md s4, s5.4 (gain flat from L = 3)
+%\end{itemize}
 
 % =====================================================================
 \subsection{Sets of runs}
@@ -122,25 +139,29 @@ Purity & Share of a track's measurement updates from its majority vessel (from t
 \label{tab:exp-runs}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X r r l}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X X r l}
 \toprule
-Runs & Question & Varies & Fixed & Seeds & Runs & Results \\
+Name & Motivation & Varies & Fixed & Seeds & Runs & Results \\
 \midrule
-Scale runs & RQ1: what each change to the code buys in run time and accuracy & Radius 12--200~km at $10^{-9}$~m$^{-2}$; 50 and 100~km also at $10^{-8}$ and $10^{-7}$; code version O, S, C, R (Table~\ref{tab:exp-versions}) & Bergen center; 30 scans; single plane; online only; stopped at 60~min projected or 10~min per scan & 1 & 28 + 9 & \ref{sec:res-scale} \\
+Tracker improvement & RQ1: what does each change to the code buy in run time and accuracy? & Radius: 12--200~km, clutter: $10^{-9}$, $10^{-8}$, $10^{-7}$, code version O, S, C, R (Table~\ref{tab:exp-versions}) & Bergen center; 30 scans; flat plane geometry; online only; stopping conditions$^a$ & 1 & 28 + 9 & \ref{sec:res-scale} \\
 \addlinespace
-Phase profiles & RQ1: which phases take the time & The scale runs' points (R); C at 50~km, $10^{-8}$ and $10^{-7}$; S at 50~km, $10^{-9}$ & As the scale runs; 12 scans; phase timers & 1 & 13 & \ref{sec:res-phases} \\
+Single scan profile & RQ1: where does the time go each scan? & The scale runs' points (R); C at 50~km, $10^{-8}$ and $10^{-7}$; S at 50~km, $10^{-9}$ & As the scale runs; 12 scans; phase timers & 1 & 13 & \ref{sec:res-phases} \\
 \addlinespace
-Moored kept & Is it right to leave the moored vessels out? & Moored vessels kept & Bergen, Ålesund, Stad & 5 & 15 & \ref{sec:res-moored} \\
+Stationary filter off & Is it right to leave the moored vessels out? & Moored vessels kept & Bergen, Ålesund, Stad & 5 & 15 & \ref{sec:res-moored} \\
 \addlinespace
-Scene runs & RQ3: usable track histories in each kind of scene? Does the lagged estimate help? & The eight windows & -- & 5 & 40 & \ref{sec:res-estimates}, \ref{sec:res-scenes} \\
+Revisit time & RQ3: does the tracker degrade with revisit time?. RQ2: does the geometry matter there? & Revisit 120, 300, 600, 900~s, number of scans & Skagerrak, Stad; total time 240~min; both geometries & 5 & 40 & \ref{sec:res-geometry}, \ref{sec:res-revisit} \\
 \addlinespace
-Lane revisit runs & RQ3: how the tracker degrades with revisit time. RQ2: does the geometry matter there? & Revisit 120, 300, 600, 900~s & Skagerrak, Stad; 240~min; both geometries & 5 & 40 & \ref{sec:res-geometry}, \ref{sec:res-revisit} \\
+Geometry and scale & RQ2 \& RQ3: big scale, large revisit time to make the geometry matter. & Revisit 300, 900, 1800~s & Mid-coast; 8~h; both geometries & 3 & 9 & \ref{sec:res-geometry}, \ref{sec:res-revisit} \\
 \addlinespace
-Mid-coast runs & RQ2: where the single plane starts to matter. RQ3 on a large window & Revisit 300, 900, 1800~s & Mid-coast; 8~h; both geometries & 3 & 9 & \ref{sec:res-geometry}, \ref{sec:res-revisit} \\
-\addlinespace
-Time-of-day runs & RQ3: do the scores follow the traffic over the day? Cases to look at & Start 00, 04, 08, 12, 16, 20~UTC & -- & 1 & 48 & \ref{sec:res-time-of-day} \\
+Different scenes & RQ3: Gather varied data for both quantitative and qualitative evaluation & The eight windows, time of day & -- & 5 for stock window, 1 per varied start time & 40 & \ref{sec:res-estimates}, \ref{sec:res-scenes} \\
+%\addlinespace
+%Time-of-day runs & RQ3: do the scores follow the traffic over the day? Cases to look at & Start 00, 04, 08, 12, 16, 20~UTC & -- & 1 & 48 & \ref{sec:res-time-of-day} \\
 \bottomrule
 \end{tabularx}
+
+\smallskip
+\footnotesize
+$^a$ runs are stopped prematurely if projected at more than 60~min or takes 10~min or more per scan.
 \end{table}
 
 \begin{table}[htbp]
@@ -152,8 +173,8 @@ Time-of-day runs & RQ3: do the scores follow the traffic over the day? Cases to 
 \toprule
 Version & Change \\
 \midrule
-O & The 2024 implementation \cite{ais_imm_pmbm} with two one-line fixes so that it runs on today's data; replayed on the same measurements \\
-S & The speed-ups that leave the results unchanged (Appendix~\ref{app:speedups}); still one list of global hypotheses \\
+O & The 2024 implementation \cite{ais_imm_pmbm} with two one-line fixes so that it runs on today's data. \\
+S & All speed-ups excluding clustering and recycling (Appendix~\ref{app:speedups}); Still one list of global hypotheses. \\
 C & Clustering (Section~\ref{sec:impl-clustering}), without recycling \\
 R & Recycling (Section~\ref{sec:impl-recycling}): the tracker of every other run \\
 \bottomrule
