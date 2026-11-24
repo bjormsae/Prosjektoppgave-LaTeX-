@@ -128,20 +128,16 @@ To complete the reformation of clusters, the global hypotheses need to be margin
 % =====================================================================
 \subsection{Recycling}
 \label{sec:impl-recycling}
-\begin{itemize}
-    \item The special case implemented: a cluster with one track and one hypothesis whose Bernoulli has $r < 0.2$ becomes a Poisson component with weight $r$.
-    \item Why: low-existence Bernoullis linked clusters into giant groups, and their evidence was lost in truncation.
-    \item In practice almost all recycled Bernoullis are new ones born on clutter or on unconfirmed detections (98\,\% were never confirmed).
-\end{itemize}
 
-Capping, tree pruning, recycling.
+We introduced the idea of recycling earlier in \autoref{sec:pmbm-reduction} and as a concept it makes intuitive sense. Put unlikely targets back into the Poisson undetected intensity to save computation in data association and hypothesis management. However, actually implementing said recycling is not necessarily straight forward. The complexity comes from needing to extract a single target from the structure of hypothesis weights, existence probabilities and estimates. This is a non-trivial task we will not be attempting in this project. We will rather investigate if recycling can be effective in a far simpler special case.
+\medskip
 
-\begin{itemize}
-    \item Recycling is a non-trivial problem in general, but simple special case recycling can be implemented quite easily. 
-    \item Criteria for being recycled; take a cluster with exactly one track and one hypothesis. The hypothesis's Bernoulli must also have existence probability $r < 0.2$. This component is then removed from the MBM and the posterior becomes a PPP component with $w = r$ and mean and covariance unchanged.
-    \item The recycling does not lose any probability mass, it just moves it. We can therefore get away with such a high recycling probability threshold.
-    \item The reason for recycling these components is mainly to allow for higher clutter scenarios without blowing up runtime. In a high clutter scenario without recycling, new Bernoulli components will quickly connect clusters and make the association step a bottleneck.
-\end{itemize}
+Recycling is simple if a cluster contains a single Bernoulli with a single hypothesis. The straightforward argument can then be made that this Bernoulli can become a Poisson component with weight equal to the existence probability $r$. This is therefore the rule we will implement. At first glance, the potential gain for using such a narrow rule might seem slim, but these singleton-clusters appear whenever no other clusters gate a measurement. This means that the measurement is either from clutter or from a previous undetected (new) target. In the case of clutter it is cheaper to put it into the Poisson intensity and in the case of a new target, we can simply wait for more evidence before confirming it. Either way, we have now developed a system where random scattered measurements must show consistency over some time before being allowed to remain in the MBM.
+\medskip
+
+We choose to recycle Bernoullis with $r < 0.2$. As mentioned before, recycling can operate with much higher thresholds than pruning. This is because the probability mass is moved, not lost.
+
+\TODO{Maybe figure of singletons chaining entire frame over time. Up for discussion.}
 
 % =====================================================================
 \subsection{Other changes}
@@ -162,12 +158,13 @@ Capping, tree pruning, recycling.
 % =====================================================================
 \subsection{Estimation}
 \label{sec:impl-estimation}
-\begin{itemize}
-    \item The best hypothesis of every cluster; their union is the best hypothesis overall. Bernoullis with $r > 0.5$ are reported.
-    \item Estimates exist only at scan times; the history is stitched from per-scan best hypotheses, and not revised when the best hypothesis flips.
-\end{itemize}
 
-How targets are formed from hypotheses and existence probabilities.
+\subsubsection{Online estimate}
+The online estimate is presented after each measurement update. Each cluster takes its most likely hypothesis at time $k$ and reports Bernoullis with existence probability $r > 0.5$ as targets. The threshold makes sense since $r$ greater than fifty percent means that the tracker means it is more likely than not that the target exists, given the hypothesis. Target identity is tied to the root of the track tree having a unique integer ID.
+
+\subsubsection{Lagged, smoothed estimate}
+Online estimates are nice for 
+Finish later
 
 % =====================================================================
 \subsection{Parameters}
